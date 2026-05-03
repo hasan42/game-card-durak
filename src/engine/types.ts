@@ -17,6 +17,7 @@ export type PlayerRole = 'attacker' | 'defender' | 'none';
 export type GamePhase =
   | 'waiting'       // ожидание второго игрока
   | 'dealing'       // раздача карт
+  | 'handoff'       // передача устройства между игроками
   | 'attacking'     // атакующий ходит
   | 'defending'     // защищающийся отбивается
   | 'taking'        // защитник берёт карты

@@ -14,6 +14,7 @@ interface GameStore extends GameState {
   defend: (attackCardId: string, defendCard: Card) => void;
   take: () => void;
   pass: () => void; // подкинуть нельзя / бито
+  confirmHandoff: () => void; // подтвердить передачу устройства
 
   // Вспомогательные
   myRole: (playerIndex: number) => 'attacker' | 'defender' | 'none';
@@ -40,8 +41,6 @@ const INITIAL_STATE: GameState = {
   lastAction: '',
 };
 
-// dealCards removed — logic inline in startGame
-
 /** Переместить карту из руки */
 function removeFromHand(hand: Card[], card: Card): Card[] {
   return hand.filter(c => c.id !== card.id);
@@ -57,6 +56,15 @@ function canThrowInCard(card: Card, table: AttackCard[]): boolean {
     if (ac.defendCard) ranksOnTable.add(ac.defendCard.rank);
   }
   return ranksOnTable.has(card.rank);
+}
+
+/** Проверить, может ли атакующий подкинуть ещё (учитывая ограничение по картам защитника) */
+function canAttackerThrowMore(table: AttackCard[], defenderHandSize: number): boolean {
+  // Защитник уже не может принять больше карт, чем у него в руке
+  const undefendedCount = table.filter(ac => !ac.defendCard).length;
+  if (undefendedCount > 0) return true; // ещё есть неотбитые — можно подкинуть к ним
+  // Все отбиты — подкинуть можно только если защитник ещё не перегружен
+  return table.length < defenderHandSize;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -79,9 +87,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   canThrowIn: (card: Card, playerIndex: number) => {
-    const { phase, attackerIndex, table } = get();
+    const { phase, attackerIndex, table, players } = get();
     if (phase !== 'attacking' && phase !== 'defending') return false;
     if (playerIndex !== attackerIndex) return false;
+    const defenderIndex = attackerIndex === 0 ? 1 : 0;
+    // Проверяем ограничение: нельзя подкинуть больше, чем у защитника карт
+    if (!canAttackerThrowMore(table, players[defenderIndex].hand.length)) return false;
     return canThrowInCard(card, table);
   },
 
@@ -130,11 +141,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       players,
       attackerIndex,
       table: [],
-      phase: 'attacking',
+      phase: 'handoff',
       discardPile: [],
       consecutivePasses: 0,
       winner: null,
-      lastAction: `${RANK_NAMES[trumpCard.rank]}${SUIT_SYMBOLS[trumpSuit]} — козырь. Ходит Игрок ${attackerIndex + 1}`,
+      lastAction: `${RANK_NAMES[trumpCard.rank]}${SUIT_SYMBOLS[trumpSuit]} — козырь. Ходит ${players[attackerIndex].name}`,
     });
   },
 
@@ -142,10 +153,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ ...INITIAL_STATE });
   },
 
+  confirmHandoff: () => {
+    const { phase } = get();
+    if (phase !== 'handoff') return;
+    // После подтверждения — атакующий начинает ход
+    set({ phase: 'attacking' });
+  },
+
   attack: (card: Card) => {
     const { phase, attackerIndex, players, table } = get();
     if (phase !== 'attacking' && phase !== 'defending') return;
-    if (phase === 'defending' && !canThrowInCard(card, table)) return;
+
+    // Валидация: при подкидывании проверяем ранг
+    if (phase === 'defending' || (phase === 'attacking' && table.length > 0)) {
+      if (!canThrowInCard(card, table)) return;
+      // Дополнительная проверка: нельзя подкинуть больше, чем у защитника карт
+      const defenderIndex = attackerIndex === 0 ? 1 : 0;
+      if (!canAttackerThrowMore(table, players[defenderIndex].hand.length)) return;
+    }
 
     const attacker = players[attackerIndex];
     const newHand = removeFromHand(attacker.hand, card);
@@ -154,10 +179,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const newTable = [...table, { attackCard: card }];
 
+    // После атаки — передаём к защитнику
     set({
       players: newPlayers,
       table: newTable,
-      phase: 'defending',
+      phase: 'handoff',
       lastAction: `Ход: ${RANK_NAMES[card.rank]}${SUIT_SYMBOLS[card.suit]}`,
     });
   },
@@ -185,64 +211,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const allDefended = newTable.every(ac => ac.defendCard !== undefined);
 
     if (allDefended) {
-      // Бито! Переход хода
-      const { deck: currentDeck, discardPile } = get();
-      const allTableCards = newTable.flatMap(ac => [ac.attackCard, ac.defendCard!]);
-
-      // Добираем карты: сначала защитник, потом атакующий
-      let updatedPlayers = [...newPlayers];
-      let deck = [...currentDeck];
-
-      const defenderNeeds = cardsNeeded(updatedPlayers[defenderIndex].hand);
-      if (defenderNeeds > 0 && deck.length > 0) {
-        const cards = deck.slice(0, defenderNeeds);
-        deck = deck.slice(defenderNeeds);
-        updatedPlayers[defenderIndex] = {
-          ...updatedPlayers[defenderIndex],
-          hand: sortHand([...updatedPlayers[defenderIndex].hand, ...cards], trumpSuit),
-        };
-      }
-
-      const attackerNeeds = cardsNeeded(updatedPlayers[attackerIndex].hand);
-      if (attackerNeeds > 0 && deck.length > 0) {
-        const cards = deck.slice(0, attackerNeeds);
-        deck = deck.slice(attackerNeeds);
-        updatedPlayers[attackerIndex] = {
-          ...updatedPlayers[attackerIndex],
-          hand: sortHand([...updatedPlayers[attackerIndex].hand, ...cards], trumpSuit),
-        };
-      }
-
-      // Проверяем конец игры
-      const gameOver = checkGameOver(updatedPlayers, deck);
-      if (gameOver.winner !== null) {
-        set({
-          players: updatedPlayers,
-          deck,
-          table: [],
-          discardPile: [...discardPile, ...allTableCards],
-          phase: 'game_over',
-          winner: gameOver.winner,
-          lastAction: gameOver.message,
-        });
-        return;
-      }
-
-      // Следующий ход: защитник становится атакующим
-      set({
-        players: updatedPlayers,
-        deck,
-        table: [],
-        discardPile: [...discardPile, ...allTableCards],
-        attackerIndex: defenderIndex,
-        phase: 'attacking',
-        consecutivePasses: 0,
-        lastAction: 'Бито! Ход переходит.',
-      });
-    } else {
+      // Бито! — но нужно дать атакующему подкинуть или нажать «Бито»
+      // Пока просто показываем результат и ждём решения атакующего
       set({
         players: newPlayers,
         table: newTable,
+        lastAction: `Отбой: ${RANK_NAMES[defendCard.rank]}${SUIT_SYMBOLS[defendCard.suit]}. Все карты отбиты!`,
+      });
+      // Не меняем фазу — атакующий может подкинуть или нажать Бито
+    } else {
+      // Есть ещё неотбитые — атакующий может подкинуть
+      // Переход к атакующему для подкидывания
+      set({
+        players: newPlayers,
+        table: newTable,
+        phase: 'handoff',
         lastAction: `Отбой: ${RANK_NAMES[defendCard.rank]}${SUIT_SYMBOLS[defendCard.suit]}`,
       });
     }
@@ -292,24 +275,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
 
-    // Тот же атакующий продолжает
+    // Тот же атакующий продолжает — передача хода
     set({
       players: newPlayers,
       deck: currentDeck,
       table: [],
       discardPile,
-      phase: 'attacking',
+      phase: 'handoff',
       consecutivePasses: 0,
-      lastAction: 'Берёт! Атакующий продолжает.',
+      lastAction: `${players[defenderIndex].name} берёт! Атакующий продолжает.`,
     });
   },
 
   pass: () => {
     const { phase, attackerIndex, table, players, trumpSuit, deck, discardPile } = get();
 
-    // Атакующий пасует (не подкидывает / бито)
+    // Атакующий пасует (Бито!)
     if (phase === 'attacking' && table.length > 0) {
-      // Если на столе есть неотбитые карты — нельзя пасовать
       const allDefended = table.every(ac => ac.defendCard !== undefined);
       if (!allDefended) return;
 
@@ -355,13 +337,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
         return;
       }
 
+      // Защитник становится атакующим — handoff
       set({
         players: updatedPlayers,
         deck: currentDeck,
         table: [],
         discardPile: [...discardPile, ...allTableCards],
         attackerIndex: defenderIndex,
-        phase: 'attacking',
+        phase: 'handoff',
         consecutivePasses: 0,
         lastAction: 'Бито! Ход переходит.',
       });
@@ -379,17 +362,13 @@ function checkGameOver(players: Player[], deck: Card[]): { winner: number | null
 
   if (p1Empty && p2Empty) {
     // Ничья — оба без карт (редкий случай)
-    return { winner: null, message: 'Ничья!' };
+    return { winner: -1, message: 'Ничья!' };
   }
   if (p1Empty) {
-    const newPlayers: Player[] = [...players];
-    newPlayers[0] = { ...newPlayers[0], isWinner: true };
-    return { winner: 0, message: 'Игрок 1 выиграл!' };
+    return { winner: 0, message: `${players[0].name} выиграл! ${players[1].name} — дурак!` };
   }
   if (p2Empty) {
-    const newPlayers: Player[] = [...players];
-    newPlayers[1] = { ...newPlayers[1], isWinner: true };
-    return { winner: 1, message: 'Игрок 2 выиграл!' };
+    return { winner: 1, message: `${players[1].name} выиграл! ${players[0].name} — дурак!` };
   }
 
   return { winner: null, message: '' };
