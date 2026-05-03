@@ -14,10 +14,13 @@ export interface Card {
 
 export type PlayerRole = 'attacker' | 'defender' | 'none';
 
+export type GameMode = 'hotseat' | 'ai';
+
 export type GamePhase =
-  | 'waiting'       // ожидание второго игрока
+  | 'waiting'       // ожидание — выбор режима
   | 'dealing'       // раздача карт
-  | 'handoff'       // передача устройства между игроками
+  | 'handoff'       // передача устройства между игроками (hot-seat)
+  | 'ai_turn'       // AI думает
   | 'attacking'     // атакующий ходит
   | 'defending'     // защищающийся отбивается
   | 'taking'        // защитник берёт карты
@@ -46,8 +49,9 @@ export interface GameState {
   phase: GamePhase;
   discardPile: Card[];    // отбой
   consecutivePasses: number;
-  winner: number | null;  // индекс победителя
+  winner: number | null;  // индекс победителя (-1 = ничья)
   lastAction: string;     // описание последнего действия
+  gameMode: GameMode;     // режим игры
 }
 
 export interface GameActions {

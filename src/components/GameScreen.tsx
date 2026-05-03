@@ -1,5 +1,5 @@
 /**
- * Главный экран игры «Дурак» — hot-seat режим
+ * Главный экран игры «Дурак» — с поддержкой AI и hot-seat
  */
 
 import { useState } from 'react';
@@ -14,36 +14,14 @@ export function GameScreen() {
 
   const {
     deck, trumpSuit, trumpCard, players, attackerIndex, table, phase,
-    lastAction, winner, startGame, attack, defend, take, pass, confirmHandoff,
+    lastAction, winner, gameMode, aiThinking, startGame, attack, defend, take, pass, confirmHandoff,
   } = store;
 
-  const currentPlayerIndex = phase === 'defending'
-    ? (attackerIndex === 0 ? 1 : 0)
-    : attackerIndex;
+  const currentPlayerIndex = gameMode === 'ai' ? 0 : (
+    phase === 'defending' ? (attackerIndex === 0 ? 1 : 0) : attackerIndex
+  );
 
-
-  // Обработчик клика по карте
-  const handleCardClick = (card: Card) => {
-    if (phase === 'game_over' || phase === 'waiting' || phase === 'handoff') return;
-
-    if (phase === 'attacking') {
-      attack(card);
-      setSelectedCard(null);
-    } else if (phase === 'defending') {
-      // Защитник выбирает карту для отбоя
-      setSelectedCard(card);
-    }
-  };
-
-  // Обработчик отбоя
-  const handleDefend = (attackCardId: string) => {
-    if (selectedCard) {
-      defend(attackCardId, selectedCard);
-      setSelectedCard(null);
-    }
-  };
-
-  // ====== Экран ожидания ======
+  // ====== Экран выбора режима ======
   if (phase === 'waiting') {
     return (
       <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-8">
@@ -51,18 +29,21 @@ export function GameScreen() {
         <h1 className="text-5xl font-bold text-yellow-300 drop-shadow-lg">Дурак</h1>
         <p className="text-xl text-green-200">Классическая карточная игра</p>
         <div className="flex flex-col gap-3 mt-4">
-          <button onClick={startGame} className="btn btn-primary text-xl px-8 py-3">
-            🎴 Играть (hot-seat)
+          <button onClick={() => startGame('ai')} className="btn btn-primary text-xl px-8 py-3">
+            🤖 Против компьютера
+          </button>
+          <button onClick={() => startGame('hotseat')} className="btn bg-green-700 hover:bg-green-600 text-white text-xl px-8 py-3">
+            👥 Два игрока (hot-seat)
           </button>
         </div>
-        <div className="text-green-300/60 text-sm mt-8">
-          Два игрока за одним экраном
+        <div className="text-green-300/50 text-sm mt-8">
+          36 карт • Козырь • Классические правила
         </div>
       </div>
     );
   }
 
-  // ====== Экран передачи устройства ======
+  // ====== Экран передачи устройства (hot-seat) ======
   if (phase === 'handoff') {
     const nextPlayer = players[currentPlayerIndex];
     return (
@@ -100,45 +81,41 @@ export function GameScreen() {
             {loserName} — дурак! 🃏
           </p>
         )}
-        <button onClick={startGame} className="btn btn-primary text-xl px-8 py-3 mt-4">
-          🔄 Играть ещё
-        </button>
-        <button onClick={() => store.resetGame()} className="btn btn-danger px-6 py-2">
-          В меню
-        </button>
+        <div className="flex gap-3 mt-4">
+          <button onClick={() => startGame(gameMode)} className="btn btn-primary text-xl px-8 py-3">
+            🔄 Ещё раз
+          </button>
+          <button onClick={() => store.resetGame()} className="btn btn-danger px-6 py-2">
+            В меню
+          </button>
+        </div>
       </div>
     );
   }
 
   // ====== Игровой экран ======
-  const myHand = players[currentPlayerIndex].hand;
-  const opponentHand = players[attackerIndex === currentPlayerIndex ? 1 : 0].hand;
-  const opponentName = players[attackerIndex === currentPlayerIndex ? 1 : 0].name;
-  const amIAttacker = currentPlayerIndex === attackerIndex;
-  const amIDefender = currentPlayerIndex !== attackerIndex;
-
-  // Могу ли я подкинуть?
+  const myHand = players[0].hand; // В AI всегда игрок 0
+  const opponentHand = players[1].hand;
+  const opponentName = players[1].name;
+  const amIAttacker = gameMode === 'ai' ? attackerIndex === 0 : currentPlayerIndex === attackerIndex;
+  const amIDefender = gameMode === 'ai' ? attackerIndex !== 0 : currentPlayerIndex !== attackerIndex;
 
   return (
     <div className="table-bg min-h-screen flex flex-col h-screen">
       {/* Верхняя панель */}
       <div className="flex justify-between items-center px-3 py-2 bg-black/30 text-sm">
         <div className="text-green-200">
-          Козырь: <span className="text-yellow-300 font-bold">
-            {SUIT_SYMBOLS[trumpSuit]} {SUIT_NAMES[trumpSuit]}
-          </span>
+          Козырь: <span className="text-yellow-300 font-bold">{SUIT_SYMBOLS[trumpSuit]} {SUIT_NAMES[trumpSuit]}</span>
         </div>
-        <div className="text-green-200">
-          📦 {deck.length} | ♻️ {store.discardPile.length}
-        </div>
+        <div className="text-green-200">📦 {deck.length} | ♻️ {store.discardPile.length}</div>
         <div className="text-yellow-300 font-semibold">
-          {amIAttacker ? '⚔️ Атака' : '🛡️ Защита'}
+          {aiThinking ? '🤔 Компьютер думает...' : (amIAttacker ? '⚔️ Атака' : '🛡️ Защита')}
         </div>
       </div>
 
-      {/* Рука противника (рубашками) */}
-      <div className="flex justify-center gap-1 px-4 py-2 min-h-[60px] flex-wrap">
-        <span className="text-green-200/60 text-xs w-full text-center">{opponentName} ({opponentHand.length} карт)</span>
+      {/* Рука противника */}
+      <div className="flex flex-col items-center gap-0.5 px-4 py-1">
+        <span className="text-green-200/60 text-xs">{opponentName} ({opponentHand.length})</span>
         <div className="flex justify-center gap-0.5 flex-wrap">
           {opponentHand.map((_, i) => (
             <div key={i} className="card-back mini-card" />
@@ -158,7 +135,6 @@ export function GameScreen() {
               {deck.length > 1 && <div className="card-back absolute -top-1 -left-1" />}
               <div className="card-back" />
             </div>
-            <span className="text-green-200/60 text-xs ml-1">({deck.length})</span>
           </div>
         )}
 
@@ -168,7 +144,7 @@ export function GameScreen() {
             {table.map(ac => (
               <div key={ac.attackCard.id} className="flex flex-col items-center gap-1">
                 <div
-                  className={`relative cursor-pointer ${!ac.defendCard && amIDefender ? 'ring-2 ring-yellow-400 rounded-lg hover:ring-yellow-300' : ''}`}
+                  className={`relative ${!ac.defendCard && amIDefender ? 'ring-2 ring-yellow-400 rounded-lg cursor-pointer hover:ring-yellow-300' : ''}`}
                   onClick={() => !ac.defendCard && amIDefender && handleDefend(ac.attackCard.id)}
                 >
                   <CardComponent card={ac.attackCard} trumpSuit={trumpSuit} />
@@ -189,51 +165,60 @@ export function GameScreen() {
         )}
       </div>
 
-      {/* Действия */}
+      {/* Кнопки действий */}
       <div className="flex justify-center gap-3 py-2 px-4">
-        {phase === 'defending' && amIDefender && (
-          <button onClick={take} className="btn btn-danger">
-            📥 Взять ({table.filter(ac => !ac.defendCard).length + table.filter(ac => ac.defendCard).length} карт)
+        {amIDefender && table.some(ac => !ac.defendCard) && (
+          <button onClick={take} className="btn btn-danger" disabled={aiThinking}>
+            📥 Взять ({table.reduce((n, ac) => n + (ac.defendCard ? 0 : 1), 0)} карт)
           </button>
         )}
-        {((phase === 'defending' || phase === 'attacking') && table.length > 0 && table.every(ac => ac.defendCard) && amIAttacker) && (
-          <button onClick={pass} className="btn btn-success">
+        {amIAttacker && table.length > 0 && table.every(ac => ac.defendCard) && (
+          <button onClick={pass} className="btn btn-success" disabled={aiThinking}>
             ✅ Бито!
           </button>
         )}
       </div>
 
       {/* Подсказка */}
-      {phase === 'defending' && amIDefender && selectedCard && (
+      {amIDefender && selectedCard && (
         <div className="text-center text-yellow-300 text-sm py-1">
           Нажмите на карту атаки, чтобы отбить {RANK_NAMES[selectedCard.rank]}{SUIT_SYMBOLS[selectedCard.suit]}
         </div>
       )}
-      {phase === 'defending' && amIDefender && !selectedCard && table.some(ac => !ac.defendCard) && (
-        <div className="text-center text-green-200 text-sm py-1">
-          Выберите карту для защиты из руки
-        </div>
-      )}
 
       {/* Моя рука */}
-      <div className="flex justify-center gap-1 px-4 py-3 bg-black/30 min-h-[110px] flex-wrap items-end">
+      <div className="flex justify-center gap-1 px-4 py-3 bg-black/30 min-h-[100px] flex-wrap items-end">
         {myHand.map(card => (
           <CardComponent
             key={card.id}
             card={card}
             trumpSuit={trumpSuit}
             selected={selectedCard?.id === card.id}
-            onClick={() => handleCardClick(card)}
+            onClick={() => {
+              if (aiThinking) return;
+              if (amIAttacker && (phase === 'attacking' || (phase === 'defending' && gameMode === 'ai'))) {
+                attack(card);
+                setSelectedCard(null);
+              } else if (amIDefender) {
+                setSelectedCard(card);
+              }
+            }}
+            disabled={aiThinking}
           />
         ))}
       </div>
 
-      {/* Лог последнего действия */}
+      {/* Лог */}
       {lastAction && (
-        <div className="text-center text-green-200/70 text-xs py-1 bg-black/20">
-          {lastAction}
-        </div>
+        <div className="text-center text-green-200/70 text-xs py-1 bg-black/20">{lastAction}</div>
       )}
     </div>
   );
+
+  function handleDefend(attackCardId: string) {
+    if (selectedCard) {
+      defend(attackCardId, selectedCard);
+      setSelectedCard(null);
+    }
+  }
 }
