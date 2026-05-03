@@ -11,6 +11,7 @@ import { SUIT_SYMBOLS, RANK_NAMES, SUIT_NAMES } from '../engine/cards';
 import type { Card, GameState } from '../engine/types';
 import type { NetworkRole } from '../engine/network';
 import { NetworkManager } from '../engine/network';
+import { isVKEnvironment } from '../vk';
 
 export function GameScreen() {
   const store = useGameStore();
@@ -80,6 +81,10 @@ export function GameScreen() {
   // Методы всегда из store
   const { aiThinking } = store;
 
+  const [playerCount, setPlayerCount] = useState(2);
+  const isVK = isVKEnvironment();
+  
+
   // ====== Сетевой экран ======
   if (showNetwork && !isNetworkMode) {
     return (
@@ -110,14 +115,34 @@ export function GameScreen() {
           <button onClick={() => store.startGame('ai')} className="btn btn-primary text-xl px-8 py-3">
             🤖 Против компьютера
           </button>
+
+          {/* Выбор количества игроков для AI */}
+          <div className="flex items-center justify-center gap-2 mt-1">
+            <span className="text-green-200 text-sm">Игроков:</span>
+            {[2, 3, 4].map(n => (
+              <button
+                key={n}
+                onClick={() => setPlayerCount(n)}
+                className={`w-10 h-10 rounded-lg font-bold text-lg ${playerCount === n ? 'bg-yellow-500 text-black' : 'bg-frost-800 text-green-200 hover:bg-frost-700'}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+
           <button onClick={() => store.startGame('hotseat')} className="btn bg-green-700 hover:bg-green-600 text-white text-xl px-8 py-3">
-            👥 Два игрока (hot-seat)
+            👥 Hot-seat (на одном устройстве)
           </button>
           <button onClick={() => setShowNetwork(true)} className="btn bg-purple-700 hover:bg-purple-600 text-white text-xl px-8 py-3">
             🌐 По сети
           </button>
+          {isVK && (
+            <div className="text-center text-sm text-blue-300 mt-2">
+              VK Mini App активен 👆
+            </div>
+          )}
         </div>
-        <div className="text-green-300/50 text-sm mt-8">
+        <div className="text-green-300/50 text-sm mt-4">
           36 карт • Козырь • Классические правила
         </div>
       </div>
