@@ -163,7 +163,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const players: Player[] = [
       { id: 'player1', name: 'Вы', hand: p1Hand, isWinner: false, takenCount: 0 },
-      { id: 'player2', name: mode === 'ai' ? 'Компьютер' : 'Игрок 2', hand: p2Hand, isWinner: false, takenCount: 0 },
+      { id: 'player2', name: mode === 'ai' ? 'Компьютер' : (mode === 'network' ? 'Соперник' : 'Игрок 2'), hand: p2Hand, isWinner: false, takenCount: 0 },
     ];
 
     let attackerIndex = 0;
@@ -175,7 +175,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       attackerIndex = 1;
     }
 
-    const initialPhase = mode === 'hotseat' ? 'handoff' : 'attacking';
+    const initialPhase = (mode === 'hotseat') ? 'handoff' : 'attacking';
 
     set({
       deck: remainingDeck, trumpSuit, trumpCard, players, attackerIndex,
