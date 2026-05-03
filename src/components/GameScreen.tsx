@@ -110,21 +110,46 @@ export function GameScreen() {
 
   // ====== Экран конца игры ======
   if (phase === 'game_over') {
-    const loserName = winner === 0 ? players[1].name : (winner === 1 ? players[0].name : '');
-    const winnerName = winner === 0 ? players[0].name : (winner === 1 ? players[1].name : '');
+    const loser = winner === 0 ? players[1] : (winner === 1 ? players[0] : null);
+    const winnerPlayer = winner === 0 ? players[0] : (winner === 1 ? players[1] : null);
+    const isAiMode = gameMode === 'ai';
+    const playerWon = winner === 0;
+    const roundCount = store.roundCount || 1;
+
     return (
-      <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
-        <div className="text-7xl mb-2">{winner === -1 ? '🤝' : '🎉'}</div>
-        <h1 className="text-4xl font-bold text-yellow-300 drop-shadow-lg">
-          {winner === -1 ? 'Ничья!' : `${winnerName} выиграл!`}
+      <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-4 game-over-appear">
+        <div className="text-8xl mb-2 game-over-emoji">{winner === -1 ? '🤝' : (playerWon || !isAiMode ? '🎉' : '😅')}</div>
+        <h1 className="text-4xl sm:text-5xl font-bold text-yellow-300 drop-shadow-lg">
+          {winner === -1 ? 'Ничья!' : (isAiMode ? (playerWon ? 'Вы выиграли!' : 'Вы — дурак! 🃏') : `${winnerPlayer?.name} выиграл!`)}
         </h1>
-        {winner !== -1 && (
-          <p className="text-xl text-red-300">
-            {loserName} — дурак! 🃏
-          </p>
-        )}
+
+        {/* Stats */}
+        <div className="bg-black/30 rounded-xl p-4 sm:p-6 mt-2 min-w-[280px]">
+          <h3 className="text-ice-300 text-sm font-bold mb-3 text-center">📊 Итоги игры</h3>
+          <div className="grid grid-cols-2 gap-3 text-center text-sm">
+            <div>
+              <div className="text-yellow-300 text-2xl font-bold">{roundCount}</div>
+              <div className="text-green-300/70">Раундов</div>
+            </div>
+            {loser && (
+              <div>
+                <div className="text-red-400 text-2xl font-bold">{loser.takenCount}</div>
+                <div className="text-green-300/70">Взятий карт</div>
+              </div>
+            )}
+            <div>
+              <div className="text-green-300 text-2xl font-bold">{store.discardPile.length}</div>
+              <div className="text-green-300/70">Карт в отборе</div>
+            </div>
+            <div>
+              <div className="text-ice-200 text-2xl font-bold">{SUIT_SYMBOLS[trumpSuit]}</div>
+              <div className="text-green-300/70">Козырь</div>
+            </div>
+          </div>
+        </div>
+
         <div className="flex gap-3 mt-4">
-          <button onClick={() => startGame(gameMode)} className="btn btn-primary text-xl px-8 py-3">
+          <button onClick={() => startGame(gameMode)} className="btn btn-primary text-lg px-6 py-3">
             🔄 Ещё раз
           </button>
           <button onClick={() => store.resetGame()} className="btn btn-danger px-6 py-2">
