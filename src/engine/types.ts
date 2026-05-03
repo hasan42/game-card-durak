@@ -14,7 +14,7 @@ export interface Card {
 
 export type PlayerRole = 'attacker' | 'defender' | 'none';
 
-export type GameMode = 'hotseat' | 'ai';
+export type GameMode = 'hotseat' | 'ai' | 'network';
 
 export type GamePhase =
   | 'waiting'       // ожидание — выбор режима
@@ -64,3 +64,28 @@ export interface GameActions {
   startGame: () => void;
   resetGame: () => void;
 }
+
+// ====== Сетевая игра ======
+
+/** Состояние для гостя — скрываем карты противника */
+export interface NetworkGameState {
+  /** Индекс «моего» игрока (0 = хост, 1 = гость) */
+  myPlayerIndex: number;
+  /** Полное состояние игры, но opponents hand скрыта */
+  state: GameState;
+  /** Сколько карт у противника (вместо самих карт) */
+  opponentCardCount: number;
+}
+
+/** Сообщения по сети */
+export type NetworkAction =
+  | { type: 'attack'; cardId: string }
+  | { type: 'defend'; attackCardId: string; defendCardId: string }
+  | { type: 'take' }
+  | { type: 'pass' };
+
+export type NetworkMessage =
+  | { type: 'full_state'; state: GameState; myPlayerIndex: number }
+  | { type: 'action'; action: NetworkAction }
+  | { type: 'connected' }
+  | { type: 'disconnected' };
