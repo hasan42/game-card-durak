@@ -2,12 +2,11 @@
  * Экран сетевой игры — создание/подключение к комнате
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NetworkManager } from '../engine/network';
-import type { NetworkRole } from '../engine/network';
 
 interface NetworkScreenProps {
-  onConnected: (network: NetworkManager, role: NetworkRole) => void;
+  onConnected: (network: NetworkManager, role: 'host' | 'guest') => void;
   onBack: () => void;
 }
 
@@ -17,36 +16,46 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [generatedRoomId, setGeneratedRoomId] = useState('');
+  const networkRef = useRef<NetworkManager | null>(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (networkRef.current && mode !== 'choose') {
+        // Don't disconnect if we've handed off to game
+      }
+    };
+  }, []);
 
   const handleHost = async () => {
     setStatus('Создание комнаты...');
     setError('');
 
-    const network = new NetworkManager({
-      onConnected: (_role, _peerId) => {
-        setStatus('Комната создана! Ожидание игрока...');
-      },
-      onDisconnected: () => {
+    const network = new NetworkManager();
+    networkRef.current = network;
+
+    // Listen for guest connection
+    network.on((event) => {
+      if (event.type === 'connected' && network.role === 'host') {
+        setStatus('Игрок подключён! Начинаем...');
+        setTimeout(() => onConnected(network, 'host'), 300);
+      }
+      if (event.type === 'disconnected') {
         setError('Соединение разорвано');
-      },
-      onMessage: (msg) => {
-        if (msg.type === 'join') {
-          setStatus('Игрок подключён! Начинаем...');
-          setTimeout(() => onConnected(network, 'host'), 500);
-        }
-      },
-      onError: (err) => {
-        setError(err.message);
+      }
+      if (event.type === 'error') {
+        setError(String(event.payload?.message || event.payload || 'Ошибка'));
         setStatus('');
-      },
+      }
     });
 
     try {
       const id = await network.host();
       setGeneratedRoomId(id);
-      setStatus(`Комната создана! Код: ${id}\nОжидание второго игрока...`);
+      setStatus(`Комната создана! Ожидание второго игрока...`);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Ошибка создания комнаты');
+      setStatus('');
     }
   };
 
@@ -58,29 +67,22 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     setStatus('Подключение...');
     setError('');
 
-    const network = new NetworkManager({
-      onConnected: (_role, _peerId) => {
-        setStatus('Подключено! Начинаем...');
-        setTimeout(() => onConnected(network, 'guest'), 500);
-      },
-      onDisconnected: () => {
-        setError('Соединение разорвано');
-      },
-      onMessage: (msg) => {
-        if (msg.type === 'ready') {
-          setStatus('Хост готов!');
-        }
-      },
-      onError: (err) => {
-        setError(err.message);
+    const network = new NetworkManager();
+    networkRef.current = network;
+
+    network.on((event) => {
+      if (event.type === 'error') {
+        setError(String(event.payload?.message || event.payload || 'Ошибка подключения'));
         setStatus('');
-      },
+      }
     });
 
     try {
       await network.join(roomId.trim());
+      setStatus('Подключено! Начинаем...');
+      setTimeout(() => onConnected(network, 'guest'), 300);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Ошибка подключения');
       setStatus('');
     }
   };
@@ -88,6 +90,17 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
   const copyRoomId = () => {
     navigator.clipboard.writeText(generatedRoomId);
     setStatus('Код скопирован!');
+  };
+
+  const cancelHost = () => {
+    if (networkRef.current) {
+      networkRef.current.disconnect();
+      networkRef.current = null;
+    }
+    setMode('choose');
+    setGeneratedRoomId('');
+    setStatus('');
+    setError('');
   };
 
   if (mode === 'choose') {
@@ -135,7 +148,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
         <p className="text-green-300/60 text-sm text-center max-w-xs">
           Отправьте код другу. Когда он подключится, игра начнётся автоматически.
         </p>
-        <button onClick={() => { setMode('choose'); setGeneratedRoomId(''); }} className="btn btn-danger px-6 py-2 mt-4">
+        <button onClick={cancelHost} className="btn btn-danger px-6 py-2 mt-4">
           Отмена
         </button>
       </div>
@@ -163,7 +176,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
       </button>
       {status && <p className="text-green-200 text-sm">{status}</p>}
       {error && <p className="text-red-400 text-sm">{error}</p>}
-      <button onClick={() => setMode('choose')} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2">
+      <button onClick={() => { setMode('choose'); setStatus(''); setError(''); }} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2">
         ← Назад
       </button>
     </div>
