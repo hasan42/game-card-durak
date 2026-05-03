@@ -26,8 +26,8 @@ const INITIAL_STATE = {
   trumpSuit: 'hearts' as Suit,
   trumpCard: null,
   players: [
-    { id: 'player1', name: 'Игрок 1', hand: [], isWinner: false },
-    { id: 'player2', name: 'Компьютер', hand: [], isWinner: false },
+    { id: 'player1', name: 'Игрок 1', hand: [], isWinner: false, takenCount: 0 },
+    { id: 'player2', name: 'Компьютер', hand: [], isWinner: false, takenCount: 0 },
   ],
   attackerIndex: 0,
   table: [],
@@ -36,6 +36,7 @@ const INITIAL_STATE = {
   consecutivePasses: 0,
   winner: null,
   lastAction: '',
+  roundCount: 0,
 };
 
 function removeFromHand(hand: Card[], card: Card): Card[] {
@@ -161,8 +162,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const remainingDeck = shuffled.slice(12);
 
     const players: Player[] = [
-      { id: 'player1', name: 'Вы', hand: p1Hand, isWinner: false },
-      { id: 'player2', name: mode === 'ai' ? 'Компьютер' : 'Игрок 2', hand: p2Hand, isWinner: false },
+      { id: 'player1', name: 'Вы', hand: p1Hand, isWinner: false, takenCount: 0 },
+      { id: 'player2', name: mode === 'ai' ? 'Компьютер' : 'Игрок 2', hand: p2Hand, isWinner: false, takenCount: 0 },
     ];
 
     let attackerIndex = 0;
@@ -179,7 +180,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       deck: remainingDeck, trumpSuit, trumpCard, players, attackerIndex,
       table: [], phase: initialPhase, discardPile: [], consecutivePasses: 0,
-      winner: null, gameMode: mode, aiThinking: false,
+      winner: null, gameMode: mode, aiThinking: false, roundCount: 1,
       lastAction: `${RANK_NAMES[trumpCard.rank]}${SUIT_SYMBOLS[trumpSuit]} — козырь`,
     });
 
@@ -269,7 +270,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   take: () => {
-    const { players, attackerIndex, trumpSuit, table, deck, discardPile, gameMode } = get();
+    const { players, attackerIndex, trumpSuit, table, deck, discardPile, gameMode, roundCount } = get();
     const defenderIndex = attackerIndex === 0 ? 1 : 0;
     const defender = players[defenderIndex];
 
@@ -281,7 +282,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const newDefenderHand = sortHand([...defender.hand, ...tableCards], trumpSuit);
     const newPlayers: Player[] = [...players];
-    newPlayers[defenderIndex] = { ...defender, hand: newDefenderHand };
+    newPlayers[defenderIndex] = { ...defender, hand: newDefenderHand, takenCount: defender.takenCount + 1 };
 
     // Attacker draws
     const attacker = newPlayers[attackerIndex];
@@ -296,14 +297,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const gameOver = checkGameOver(newPlayers, currentDeck);
     if (gameOver.winner !== null || gameOver.winner === -1) {
       set({ players: newPlayers, deck: currentDeck, table: [], discardPile,
-        phase: 'game_over', winner: gameOver.winner, lastAction: gameOver.message });
+        phase: 'game_over', winner: gameOver.winner, lastAction: gameOver.message, roundCount: roundCount + 1 });
       return;
     }
 
     const nextPhase = gameMode === 'hotseat' ? 'handoff' : 'attacking';
     set({
       players: newPlayers, deck: currentDeck, table: [], discardPile,
-      phase: nextPhase, consecutivePasses: 0,
+      phase: nextPhase, consecutivePasses: 0, roundCount: roundCount + 1,
       lastAction: gameMode === 'ai' && defenderIndex === 1
         ? 'Компьютер берёт карты!'
         : `${players[defenderIndex].name} берёт!`,
@@ -316,7 +317,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   pass: () => {
-    const { phase, attackerIndex, table, players, trumpSuit, deck, discardPile, gameMode } = get();
+    const { phase, attackerIndex, table, players, trumpSuit, deck, discardPile, gameMode, roundCount } = get();
 
     if ((phase === 'attacking' || phase === 'defending') && table.length > 0) {
       const allDefended = table.every(ac => ac.defendCard !== undefined);
@@ -346,12 +347,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
 
       const nextPhase = gameMode === 'hotseat' ? 'handoff' : 'attacking';
-      set({
-        players: updatedPlayers, deck: currentDeck, table: [],
+      set({ players: updatedPlayers, deck: currentDeck, table: [],
         discardPile: [...discardPile, ...allTableCards],
-        attackerIndex: defenderIndex, phase: nextPhase, consecutivePasses: 0,
-        lastAction: 'Бито!',
-      });
+        attackerIndex: defenderIndex, phase: nextPhase, consecutivePasses: 0, roundCount: roundCount + 1,
+        lastAction: 'Бито!' });
 
       // AI takes next turn
       if (gameMode === 'ai' && defenderIndex === 1) {

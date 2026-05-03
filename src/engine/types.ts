@@ -32,6 +32,7 @@ export interface Player {
   name: string;
   hand: Card[];
   isWinner: boolean;
+  takenCount: number; // сколько раз брал карты
 }
 
 export interface AttackCard {
@@ -52,6 +53,7 @@ export interface GameState {
   winner: number | null;  // индекс победителя (-1 = ничья)
   lastAction: string;     // описание последнего действия
   gameMode: GameMode;     // режим игры
+  roundCount: number;     // номер раунда
 }
 
 export interface GameActions {
