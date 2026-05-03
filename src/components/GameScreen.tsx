@@ -74,7 +74,7 @@ export function GameScreen() {
   }
 
   const {
-    deck, trumpSuit, trumpCard, players, attackerIndex, table, phase,
+    deck, trumpSuit, trumpCard, players, table, phase,
     lastAction, winner, gameMode,
   } = gameState;
 
@@ -151,15 +151,18 @@ export function GameScreen() {
 
   // ====== Экран передачи устройства (hot-seat) ======
   if (phase === 'handoff' && !isNetworkMode) {
-    const currentPlayerIndex = attackerIndex === 0 ? 1 : 0; // defender starts when handoff
+    const currentPlayerIndex = gameState.activePlayerIndex ?? gameState.defenderIndex ?? 1;
     const nextPlayer = players[currentPlayerIndex];
+    const isAttacker = currentPlayerIndex === (gameState.attackerIndex ?? 0);
+    const isDefender = currentPlayerIndex === (gameState.defenderIndex ?? 1);
+    const roleLabel = isAttacker ? '⚔️' : isDefender ? '🛡️' : '🔄';
     return (
       <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
         <div className="text-6xl mb-4">🔄</div>
         <h2 className="text-3xl font-bold text-yellow-300">Передайте устройство</h2>
-        <p className="text-2xl text-green-200 font-semibold">{nextPlayer.name}</p>
+        <p className="text-2xl text-green-200 font-semibold">{roleLabel} {nextPlayer.name}</p>
         <p className="text-green-300/80">
-          {attackerIndex === currentPlayerIndex ? '⚔️ Ваш ход — атакуйте!' : '🛡️ Вы защищаетесь!'}
+          {isAttacker ? 'Ваш ход — атакуйте!' : isDefender ? 'Вы защищаетесь!' : 'Вы подкидываете!'}
         </p>
         {trumpCard && (
           <div className="text-green-300/60 text-sm mt-2">
@@ -175,12 +178,11 @@ export function GameScreen() {
 
   // ====== Экран конца игры ======
   if (phase === 'game_over') {
-    const loser = winner === 0 ? players[1] : (winner === 1 ? players[0] : null);
-    const winnerPlayer = winner === 0 ? players[0] : (winner === 1 ? players[1] : null);
     const isAiMode = gameMode === 'ai';
-    const isNetMode = isNetworkMode;
-    const playerWon = isNetMode ? winner === myPlayerIndex : winner === 0;
+    const playerWon = isNetworkMode ? winner === myPlayerIndex : (isAiMode ? winner === 0 : winner !== null);
     const roundCount = gameState.roundCount || 1;
+    const pc = gameState.playerCount ?? 2;
+    const loserPlayer = players.find(p => p.hand.length > 0);
 
     return (
       <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-4 game-over-appear">
@@ -188,35 +190,43 @@ export function GameScreen() {
           {winner === -1 ? '🤝' : (playerWon ? '🎉' : '😅')}
         </div>
         <h1 className="text-4xl sm:text-5xl font-bold text-yellow-300 drop-shadow-lg">
-          {winner === -1 ? 'Ничья!' : (isAiMode ? (playerWon ? 'Вы выиграли!' : 'Вы — дурак! 🃏') : isNetMode ? (playerWon ? 'Вы выиграли!' : 'Вы — дурак! 🃏') : `${winnerPlayer?.name} выиграл!`)}
+          {winner === -1 ? 'Ничья!' : isAiMode ? (playerWon ? 'Вы выиграли!' : 'Вы — дурак! 🃏') : (loserPlayer ? `${loserPlayer.name} — дурак!` : 'Игра окончена!')}
         </h1>
-        <div className="bg-black/30 rounded-xl p-4 sm:p-6 mt-2 min-w-[280px]">
-          <h3 className="text-ice-300 text-sm font-bold mb-3 text-center">📊 Итоги игры</h3>
-          <div className="grid grid-cols-2 gap-3 text-center text-sm">
+
+        <div className="bg-black/30 rounded-xl p-4 sm:p-6 mt-2 min-w-[300px]">
+          <h3 className="text-ice-300 text-sm font-bold mb-3 text-center">📊 Игроки</h3>
+          <div className="space-y-1">
+            {players.map((p) => (
+              <div key={p.id} className={`flex justify-between items-center px-3 py-1 rounded ${p.hand.length === 0 ? 'bg-yellow-900/30' : (loserPlayer?.id === p.id ? 'bg-red-900/30' : 'bg-black/20')}`}>
+                <span className={p.hand.length === 0 ? 'text-yellow-300 font-bold' : (loserPlayer?.id === p.id ? 'text-red-400' : 'text-green-200')}>
+                  {p.hand.length === 0 ? '👑' : (loserPlayer?.id === p.id ? '🃏' : '✅')} {p.name}
+                </span>
+                <span className="text-green-300/60 text-xs">
+                  {p.hand.length} карт • {p.takenCount} взятий
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-3 text-center text-sm">
             <div>
-              <div className="text-yellow-300 text-2xl font-bold">{roundCount}</div>
+              <div className="text-yellow-300 text-xl font-bold">{roundCount}</div>
               <div className="text-green-300/70">Раундов</div>
             </div>
-            {loser && (
-              <div>
-                <div className="text-red-400 text-2xl font-bold">{loser.takenCount}</div>
-                <div className="text-green-300/70">Взятий карт</div>
-              </div>
-            )}
             <div>
-              <div className="text-green-300 text-2xl font-bold">{gameState.discardPile?.length || 0}</div>
-              <div className="text-green-300/70">Карт в отборе</div>
+              <div className="text-green-300 text-xl font-bold">{gameState.discardPile?.length || 0}</div>
+              <div className="text-green-300/70">В отборе</div>
             </div>
             <div>
-              <div className="text-ice-200 text-2xl font-bold">{SUIT_SYMBOLS[trumpSuit]}</div>
+              <div className="text-ice-200 text-xl font-bold">{SUIT_SYMBOLS[trumpSuit]}</div>
               <div className="text-green-300/70">Козырь</div>
             </div>
           </div>
         </div>
+
         <div className="flex gap-3 mt-4">
           <button onClick={() => {
             if (isNetworkMode) { netStore.disconnect(); }
-            store.startGame(gameMode);
+            store.startGame(gameMode, pc);
           }} className="btn btn-primary text-lg px-6 py-3">
             🔄 Ещё раз
           </button>
@@ -315,7 +325,7 @@ export function GameScreen() {
           const roleLabel = isAttacker ? '⚔️' : isDefender ? '🛡️' : '🔄';
           return (
             <div key={p.id} className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg ${isActive ? 'bg-yellow-900/30 ring-1 ring-yellow-500' : 'bg-black/20'}`}>
-              <span className="text-xs font-medium ${isActive ? 'text-yellow-300' : 'text-green-200/60'}">
+              <span className={`text-xs font-medium ${isActive ? 'text-yellow-300' : 'text-green-200/60'}`}>
                 {roleLabel} {p.name} ({p.hand?.length || 0})
               </span>
               <div className="flex gap-0.5">
