@@ -112,14 +112,14 @@ export function GameScreen() {
         <h1 className="text-5xl font-bold text-yellow-300 drop-shadow-lg">Дурак</h1>
         <p className="text-xl text-green-200">Классическая карточная игра</p>
         <div className="flex flex-col gap-3 mt-4">
-          <button onClick={() => store.startGame('ai')} className="btn btn-primary text-xl px-8 py-3">
+          <button onClick={() => store.startGame('ai' as any, playerCount)} className="btn btn-primary text-xl px-8 py-3">
             🤖 Против компьютера
           </button>
 
           {/* Выбор количества игроков для AI */}
           <div className="flex items-center justify-center gap-2 mt-1">
             <span className="text-green-200 text-sm">Игроков:</span>
-            {[2, 3, 4].map(n => (
+            {[2, 3, 4, 5, 6].map(n => (
               <button
                 key={n}
                 onClick={() => setPlayerCount(n)}
@@ -231,26 +231,27 @@ export function GameScreen() {
     );
   }
 
-  // ====== Игровой экран ======
-  // В сетевом режиме: игрок видит только свои карты
-  // В AI/hot-seat: стандартный вид
+  // ====== Игровой экран (N игроков) ======
+  const myIndex = isNetworkMode ? myPlayerIndex : 0; // В AI режиме человек = игрок 0
+  const defenderIdx = gameState.defenderIndex ?? 1;
+  const attackerIdx = gameState.attackerIndex ?? 0;
+  const activeIdx = gameState.activePlayerIndex ?? 0;
+  const pc = gameState.playerCount ?? 2;
 
   const myHand = isNetworkMode
     ? (players[myPlayerIndex]?.hand || [])
-    : players[0].hand;
+    : players[myIndex]?.hand || [];
 
-  const opponentIndex = isNetworkMode ? (myPlayerIndex === 0 ? 1 : 0) : 1;
-  const opponent = players[opponentIndex];
-  const opponentHandCount = opponent?.hand?.length || 0;
+  // Роли
+  const amIAttacker = myIndex === attackerIdx;
+  const amIDefender = myIndex === defenderIdx;
+  const amIThrower = !amIAttacker && !amIDefender && myIndex !== defenderIdx;
+  const amIActive = myIndex === activeIdx;
 
-  // В сетевом режиме определяем чей ход
-  const isMyAttackerTurn = isNetworkMode ? attackerIndex === myPlayerIndex : (gameMode === 'ai' ? attackerIndex === 0 : attackerIndex === 0);
-  const isMyDefenderTurn = isNetworkMode ? attackerIndex !== myPlayerIndex : (gameMode === 'ai' ? attackerIndex !== 0 : attackerIndex !== 0);
+  // Роль для отображения
+  const myRole = amIAttacker ? '⚔️ Атака' : amIDefender ? '🛡️ Защита' : amIThrower ? '🔄 Подкидывает' : '⏳ Ожидание';
 
-  const amIAttacker = isNetworkMode ? isMyAttackerTurn : (gameMode === 'ai' ? attackerIndex === 0 : attackerIndex === 0);
-  const amIDefender = isNetworkMode ? isMyDefenderTurn : (gameMode === 'ai' ? attackerIndex !== 0 : attackerIndex !== 0);
-
-  // Действия — в сетевом режиме гость отправляет через сеть
+  // Действия
   const doAttack = (card: Card) => {
     if (isNetworkMode && netStore.role === 'guest') {
       netStore.sendAction({ type: 'attack', cardId: card.id });
@@ -281,6 +282,10 @@ export function GameScreen() {
     store.pass();
   };
 
+  // Другие игроки (кроме меня)
+  const otherPlayers = players.map((p, i) => ({ ...p, index: i }))
+    .filter(p => p.index !== myIndex);
+
   return (
     <div className="table-bg min-h-screen flex flex-col h-screen">
       {/* Верхняя панель */}
@@ -288,7 +293,7 @@ export function GameScreen() {
         <div className="text-green-200">
           Козырь: <span className="text-yellow-300 font-bold">{SUIT_SYMBOLS[trumpSuit]} {SUIT_NAMES[trumpSuit]}</span>
         </div>
-        <div className="text-green-200">📦 {deck.length} | ♻️ {gameState.discardPile?.length || 0}</div>
+        <div className="text-green-200">📦 {deck.length} | ♻️ {gameState.discardPile?.length || 0} | 👥 {pc}</div>
         <div className="flex items-center gap-2">
           {isNetworkMode && (
             <span className={netStore.connected ? 'text-green-400' : 'text-red-400'}>
@@ -296,21 +301,32 @@ export function GameScreen() {
             </span>
           )}
           <span className="text-yellow-300 font-semibold">
-            {aiThinking ? '🤔 Компьютер думает...' : (amIAttacker ? '⚔️ Атака' : '🛡️ Защита')}
+            {aiThinking ? '🤔 Думает...' : myRole}
           </span>
         </div>
       </div>
 
-      {/* Рука противника */}
-      <div className="flex flex-col items-center gap-0.5 px-4 py-1">
-        <span className="text-green-200/60 text-xs">
-          {isNetworkMode ? (opponentIndex === 0 ? 'Хост' : 'Гость') : opponent?.name} ({opponentHandCount})
-        </span>
-        <div className="flex justify-center gap-0.5 flex-wrap">
-          {Array.from({ length: opponentHandCount }, (_, i) => (
-            <div key={i} className="card-back mini-card" />
-          ))}
-        </div>
+      {/* Другие игроки */}
+      <div className="flex flex-wrap justify-center gap-2 px-3 py-2">
+        {otherPlayers.map(p => {
+          const isDefender = p.index === defenderIdx;
+          const isAttacker = p.index === attackerIdx;
+          const isActive = p.index === activeIdx;
+          const roleLabel = isAttacker ? '⚔️' : isDefender ? '🛡️' : '🔄';
+          return (
+            <div key={p.id} className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg ${isActive ? 'bg-yellow-900/30 ring-1 ring-yellow-500' : 'bg-black/20'}`}>
+              <span className="text-xs font-medium ${isActive ? 'text-yellow-300' : 'text-green-200/60'}">
+                {roleLabel} {p.name} ({p.hand?.length || 0})
+              </span>
+              <div className="flex gap-0.5">
+                {Array.from({ length: Math.min(p.hand?.length || 0, 10) }, (_, i) => (
+                  <div key={i} className="card-back mini-card" style={{ width: '18px', height: '26px' }} />
+                ))}
+                {(p.hand?.length || 0) > 10 && <span className="text-xs text-green-300">+{p.hand.length - 10}</span>}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Стол */}
@@ -335,11 +351,11 @@ export function GameScreen() {
               return (
                 <div key={ac.attackCard.id} className="flex flex-col items-center gap-1">
                   <div
-                    className={`relative ${!ac.defendCard && amIDefender ? 'ring-2 ring-yellow-400 rounded-lg cursor-pointer hover:ring-yellow-300' : ''}`}
-                    onClick={() => !ac.defendCard && amIDefender && handleDefend(ac.attackCard.id)}
+                    className={`relative ${!ac.defendCard && amIDefender && amIActive ? 'ring-2 ring-yellow-400 rounded-lg cursor-pointer hover:ring-yellow-300' : ''}`}
+                    onClick={() => !ac.defendCard && amIDefender && amIActive && handleDefend(ac.attackCard.id)}
                   >
                     <CardComponent card={ac.attackCard} trumpSuit={trumpSuit} animating={isNewAttack ? 'play' : undefined} />
-                    {!ac.defendCard && amIDefender && (
+                    {!ac.defendCard && amIDefender && amIActive && (
                       <div className="absolute -top-2 -right-2 text-xs bg-yellow-400 text-black rounded-full w-5 h-5 flex items-center justify-center font-bold">?</div>
                     )}
                   </div>
@@ -355,24 +371,29 @@ export function GameScreen() {
             {clearing ? (
               <span className="cards-clear text-2xl font-bold text-green-300">✅ Бито!</span>
             ) : (
-              isNetworkMode
-                ? (amIAttacker ? 'Ваш ход — атакуйте!' : 'Ожидайте ход противника...')
-                : (amIAttacker ? 'Выберите карту для хода' : 'Ожидайте ход противника...')
+              amIActive
+                ? (amIAttacker ? 'Ваш ход — атакуйте!' : amIDefender ? 'Отбивайтесь или возьмите!' : amIThrower ? 'Подкиньте карту или пас' : 'Ожидайте...')
+                : 'Ожидайте свой ход...'
             )}
           </div>
         )}
       </div>
 
       {/* Кнопки действий */}
-      <div className="flex justify-center gap-3 py-2 px-4">
-        {amIDefender && table.some(ac => !ac.defendCard) && (
+      <div className="flex justify-center gap-3 py-2 px-4 flex-wrap">
+        {amIDefender && amIActive && table.some(ac => !ac.defendCard) && (
           <button onClick={doTake} className="btn btn-danger" disabled={aiThinking}>
             📥 Взять ({table.reduce((n, ac) => n + (ac.defendCard ? 0 : 1), 0)} карт)
           </button>
         )}
-        {amIAttacker && table.length > 0 && table.every(ac => ac.defendCard) && (
+        {(amIAttacker || amIThrower) && amIActive && table.length > 0 && table.every(ac => ac.defendCard) && (
           <button onClick={doPass} className="btn btn-success" disabled={aiThinking}>
             ✅ Бито!
+          </button>
+        )}
+        {amIThrower && amIActive && (
+          <button onClick={doPass} className="btn bg-gray-700 hover:bg-gray-600 text-white" disabled={aiThinking}>
+            Пас
           </button>
         )}
         {isNetworkMode && (
@@ -405,16 +426,14 @@ export function GameScreen() {
             trumpSuit={trumpSuit}
             selected={selectedCard?.id === card.id}
             onClick={() => {
-              if (aiThinking) return;
-              // В сетевом режиме — только когда мой ход
-              if (isNetworkMode && !amIAttacker && !amIDefender) return;
-              if (amIAttacker && (phase === 'attacking' || (phase === 'defending' && gameMode === 'ai'))) {
-                doAttack(card);
-              } else if (amIDefender) {
+              if (aiThinking || !amIActive) return;
+              if (amIDefender) {
                 setSelectedCard(card);
+              } else if (amIAttacker || amIThrower) {
+                doAttack(card);
               }
             }}
-            disabled={aiThinking || (isNetworkMode && !amIAttacker && !amIDefender)}
+            disabled={aiThinking || !amIActive}
           />
         ))}
       </div>

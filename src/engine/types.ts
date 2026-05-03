@@ -38,6 +38,7 @@ export interface Player {
 export interface AttackCard {
   attackCard: Card;
   defendCard?: Card; // undefined = ещё не отбился
+  attackPlayerIndex: number; // кто подкинул/атаковал
 }
 
 export interface GameState {
@@ -45,11 +46,15 @@ export interface GameState {
   trumpSuit: Suit;
   trumpCard: Card | null; // нижняя карта колоды
   players: Player[];
-  attackerIndex: number;  // 0 или 1
+  attackerIndex: number;  // кто атакует
+  defenderIndex: number;   // кто защищается
+  activePlayerIndex: number; // чей сейчас ход (для hot-seat)
+  playerCount: number;     // 2-6
   table: AttackCard[];     // карты на столе
   phase: GamePhase;
   discardPile: Card[];    // отбой
   consecutivePasses: number;
+  thrownInPasses: number; // сколько подкидывающих пасовало
   winner: number | null;  // индекс победителя (-1 = ничья)
   lastAction: string;     // описание последнего действия
   gameMode: GameMode;     // режим игры
