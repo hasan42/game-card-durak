@@ -18,20 +18,27 @@ export interface NetworkEvent {
 
 type Listener = (event: NetworkEvent) => void;
 
-// PeerJS конфигурация — используем свой сервер если доступен, иначе дефолтный
+// PeerJS конфигурация
+// Локальный PeerJS сервер на Mac mini (192.168.0.78:9000)
+// Для внешнего доступа нужен VPN/проброс портов
 function getPeerConfig(): any {
-  // Проверяем доступен ли локальный PeerJS сервер
-  const customHost = window.location.hostname;
-  const customPort = 9000;
-  const customPath = '/myapp';
+  const localPeerHost = '192.168.0.78';
+  const localPeerPort = 9000;
+  const localPeerPath = '/myapp';
 
-  // Пробуем подключиться к своему серверу (на том же хосте)
-  // Если не доступен — fallback на PeerJS Cloud
+  // Если мы на том же хосте — используем localhost
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isLocalNetwork = currentHost === localPeerHost ||
+    currentHost === 'localhost' || currentHost === '127.0.0.1';
+
+  const peerHost = isLocalNetwork ? currentHost : localPeerHost;
+  const peerSecure = isLocalNetwork ? false : false;
+
   return {
-    host: customHost,
-    port: customPort,
-    path: customPath,
-    secure: false, // HTTP для локального сервера
+    host: peerHost,
+    port: localPeerPort,
+    path: localPeerPath,
+    secure: peerSecure,
     config: {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
