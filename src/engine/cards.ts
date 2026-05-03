@@ -94,3 +94,19 @@ export function cardToString(card: Card): string {
 export function cardsNeeded(hand: Card[]): number {
   return Math.max(0, 6 - hand.length);
 }
+
+/** Получить индекс следующего игрока по кругу.
+ *  Если skipDefender = true, пропускается игрок с индексом defenderIndex
+ */
+export function getNextPlayerIndex(current: number, count: number, skipIndex?: number): number {
+  let next = (current + 1) % count;
+  if (skipIndex !== undefined && next === skipIndex) {
+    next = (next + 1) % count;
+  }
+  return next;
+}
+
+/** Получить индекс предыдущего игрока по кругу */
+export function getPrevPlayerIndex(current: number, count: number): number {
+  return (current - 1 + count) % count;
+}
