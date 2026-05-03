@@ -2,7 +2,7 @@
  * Главный экран игры «Дурак» — с поддержкой AI и hot-seat
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../engine/store';
 import { CardComponent } from './CardComponent';
 import { SUIT_SYMBOLS, RANK_NAMES, SUIT_NAMES } from '../engine/cards';
@@ -11,6 +11,48 @@ import type { Card } from '../engine/types';
 export function GameScreen() {
   const store = useGameStore();
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+
+  // Отслеживание новых карт на столе для анимаций
+  const prevTableRef = useRef<Set<string>>(new Set());
+  const [newCardIds, setNewCardIds] = useState<Set<string>>(new Set());
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    const currentIds = new Set(store.table.map(ac => ac.attackCard.id));
+    const prevIds = prevTableRef.current;
+
+    // Находим новые ID (атакующие карты)
+    const addedIds = new Set<string>();
+    for (const id of currentIds) {
+      if (!prevIds.has(id)) addedIds.add(id);
+    }
+
+    // Находим новые отбойные карты
+    for (const ac of store.table) {
+      if (ac.defendCard) {
+        const defendKey = `defend-${ac.attackCard.id}`;
+        if (!prevIds.has(defendKey)) addedIds.add(defendKey);
+      }
+    }
+
+    if (addedIds.size > 0) {
+      setNewCardIds(addedIds);
+      setTimeout(() => setNewCardIds(new Set()), 350);
+    }
+
+    // Анимация «Бито» — стол очищается
+    if (store.table.length === 0 && prevIds.size > 0 && store.lastAction === 'Бито!') {
+      setClearing(true);
+      setTimeout(() => setClearing(false), 500);
+    }
+
+    // Обновляем предыдущее состояние: атакующие + отбойные
+    const nextIds = new Set(store.table.map(ac => ac.attackCard.id));
+    store.table.forEach(ac => {
+      if (ac.defendCard) nextIds.add(`defend-${ac.attackCard.id}`);
+    });
+    prevTableRef.current = nextIds;
+  }, [store.table, store.lastAction]);
 
   const {
     deck, trumpSuit, trumpCard, players, attackerIndex, table, phase,
@@ -141,26 +183,34 @@ export function GameScreen() {
         {/* Карты на столе */}
         {table.length > 0 ? (
           <div className="flex flex-wrap gap-3 justify-center">
-            {table.map(ac => (
-              <div key={ac.attackCard.id} className="flex flex-col items-center gap-1">
-                <div
-                  className={`relative ${!ac.defendCard && amIDefender ? 'ring-2 ring-yellow-400 rounded-lg cursor-pointer hover:ring-yellow-300' : ''}`}
-                  onClick={() => !ac.defendCard && amIDefender && handleDefend(ac.attackCard.id)}
-                >
-                  <CardComponent card={ac.attackCard} trumpSuit={trumpSuit} />
-                  {!ac.defendCard && amIDefender && (
-                    <div className="absolute -top-2 -right-2 text-xs bg-yellow-400 text-black rounded-full w-5 h-5 flex items-center justify-center font-bold">?</div>
+            {table.map(ac => {
+              const isNewAttack = newCardIds.has(ac.attackCard.id);
+              const isNewDefend = ac.defendCard && newCardIds.has(`defend-${ac.attackCard.id}`);
+              return (
+                <div key={ac.attackCard.id} className="flex flex-col items-center gap-1">
+                  <div
+                    className={`relative ${!ac.defendCard && amIDefender ? 'ring-2 ring-yellow-400 rounded-lg cursor-pointer hover:ring-yellow-300' : ''}`}
+                    onClick={() => !ac.defendCard && amIDefender && handleDefend(ac.attackCard.id)}
+                  >
+                    <CardComponent card={ac.attackCard} trumpSuit={trumpSuit} animating={isNewAttack ? 'play' : undefined} />
+                    {!ac.defendCard && amIDefender && (
+                      <div className="absolute -top-2 -right-2 text-xs bg-yellow-400 text-black rounded-full w-5 h-5 flex items-center justify-center font-bold">?</div>
+                    )}
+                  </div>
+                  {ac.defendCard && (
+                    <CardComponent card={ac.defendCard} trumpSuit={trumpSuit} className="-mt-3" animating={isNewDefend ? 'play' : undefined} />
                   )}
                 </div>
-                {ac.defendCard && (
-                  <CardComponent card={ac.defendCard} trumpSuit={trumpSuit} className="-mt-3" />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="text-green-200/40 text-lg">
-            {amIAttacker ? 'Выберите карту для хода' : 'Ожидайте ход противника...'}
+            {clearing ? (
+              <span className="cards-clear text-2xl font-bold text-green-300">✅ Бито!</span>
+            ) : (
+              amIAttacker ? 'Выберите карту для хода' : 'Ожидайте ход противника...'
+            )}
           </div>
         )}
       </div>
