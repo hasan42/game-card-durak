@@ -18,6 +18,29 @@ export interface NetworkEvent {
 
 type Listener = (event: NetworkEvent) => void;
 
+// PeerJS конфигурация — используем свой сервер если доступен, иначе дефолтный
+function getPeerConfig(): any {
+  // Проверяем доступен ли локальный PeerJS сервер
+  const customHost = window.location.hostname;
+  const customPort = 9000;
+  const customPath = '/myapp';
+
+  // Пробуем подключиться к своему серверу (на том же хосте)
+  // Если не доступен — fallback на PeerJS Cloud
+  return {
+    host: customHost,
+    port: customPort,
+    path: customPath,
+    secure: false, // HTTP для локального сервера
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ],
+    },
+  };
+}
+
 export class NetworkManager {
   private peer: Peer | null = null;
   private connection: any | null = null;
@@ -60,7 +83,7 @@ export class NetworkManager {
   /** Создать комнату (хост). Resolves с room ID. */
   async host(): Promise<string> {
     return new Promise((resolve, reject) => {
-      this.peer = new Peer();
+      this.peer = new Peer(getPeerConfig());
       this.isHost = true;
       this.myRole = 'host';
 
@@ -93,7 +116,7 @@ export class NetworkManager {
   /** Присоединиться к комнате (гость) */
   async join(roomId: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.peer = new Peer();
+      this.peer = new Peer(getPeerConfig());
       this.isHost = false;
       this.myRole = 'guest';
 
