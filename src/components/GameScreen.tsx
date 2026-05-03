@@ -1,18 +1,20 @@
 /**
- * Главный экран игры «Дурак» — с поддержкой AI и hot-seat
+ * Главный экран игры «Дурак» — AI, hot-seat, сеть
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../engine/store';
 import { CardComponent } from './CardComponent';
+import { NetworkScreen } from './NetworkScreen';
 import { SUIT_SYMBOLS, RANK_NAMES, SUIT_NAMES } from '../engine/cards';
 import type { Card } from '../engine/types';
 
 export function GameScreen() {
   const store = useGameStore();
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [showNetwork, setShowNetwork] = useState(false);
 
-  // Отслеживание новых карт на столе для анимаций
+  // Анимации
   const prevTableRef = useRef<Set<string>>(new Set());
   const [newCardIds, setNewCardIds] = useState<Set<string>>(new Set());
   const [clearing, setClearing] = useState(false);
@@ -20,33 +22,24 @@ export function GameScreen() {
   useEffect(() => {
     const currentIds = new Set(store.table.map(ac => ac.attackCard.id));
     const prevIds = prevTableRef.current;
-
-    // Находим новые ID (атакующие карты)
     const addedIds = new Set<string>();
     for (const id of currentIds) {
       if (!prevIds.has(id)) addedIds.add(id);
     }
-
-    // Находим новые отбойные карты
     for (const ac of store.table) {
       if (ac.defendCard) {
-        const defendKey = `defend-${ac.attackCard.id}`;
-        if (!prevIds.has(defendKey)) addedIds.add(defendKey);
+        const key = `defend-${ac.attackCard.id}`;
+        if (!prevIds.has(key)) addedIds.add(key);
       }
     }
-
     if (addedIds.size > 0) {
       setNewCardIds(addedIds);
       setTimeout(() => setNewCardIds(new Set()), 350);
     }
-
-    // Анимация «Бито» — стол очищается
     if (store.table.length === 0 && prevIds.size > 0 && store.lastAction === 'Бито!') {
       setClearing(true);
       setTimeout(() => setClearing(false), 500);
     }
-
-    // Обновляем предыдущее состояние: атакующие + отбойные
     const nextIds = new Set(store.table.map(ac => ac.attackCard.id));
     store.table.forEach(ac => {
       if (ac.defendCard) nextIds.add(`defend-${ac.attackCard.id}`);
@@ -63,6 +56,19 @@ export function GameScreen() {
     phase === 'defending' ? (attackerIndex === 0 ? 1 : 0) : attackerIndex
   );
 
+  // ====== Сетевой экран ======
+  if (showNetwork) {
+    return (
+      <NetworkScreen
+        onConnected={() => {
+          setShowNetwork(false);
+          startGame('hotseat');
+        }}
+        onBack={() => setShowNetwork(false)}
+      />
+    );
+  }
+
   // ====== Экран выбора режима ======
   if (phase === 'waiting') {
     return (
@@ -76,6 +82,9 @@ export function GameScreen() {
           </button>
           <button onClick={() => startGame('hotseat')} className="btn bg-green-700 hover:bg-green-600 text-white text-xl px-8 py-3">
             👥 Два игрока (hot-seat)
+          </button>
+          <button onClick={() => setShowNetwork(true)} className="btn bg-purple-700 hover:bg-purple-600 text-white text-xl px-8 py-3">
+            🌐 По сети
           </button>
         </div>
         <div className="text-green-300/50 text-sm mt-8">
@@ -122,8 +131,6 @@ export function GameScreen() {
         <h1 className="text-4xl sm:text-5xl font-bold text-yellow-300 drop-shadow-lg">
           {winner === -1 ? 'Ничья!' : (isAiMode ? (playerWon ? 'Вы выиграли!' : 'Вы — дурак! 🃏') : `${winnerPlayer?.name} выиграл!`)}
         </h1>
-
-        {/* Stats */}
         <div className="bg-black/30 rounded-xl p-4 sm:p-6 mt-2 min-w-[280px]">
           <h3 className="text-ice-300 text-sm font-bold mb-3 text-center">📊 Итоги игры</h3>
           <div className="grid grid-cols-2 gap-3 text-center text-sm">
@@ -147,7 +154,6 @@ export function GameScreen() {
             </div>
           </div>
         </div>
-
         <div className="flex gap-3 mt-4">
           <button onClick={() => startGame(gameMode)} className="btn btn-primary text-lg px-6 py-3">
             🔄 Ещё раз
@@ -161,7 +167,7 @@ export function GameScreen() {
   }
 
   // ====== Игровой экран ======
-  const myHand = players[0].hand; // В AI всегда игрок 0
+  const myHand = players[0].hand;
   const opponentHand = players[1].hand;
   const opponentName = players[1].name;
   const amIAttacker = gameMode === 'ai' ? attackerIndex === 0 : currentPlayerIndex === attackerIndex;
@@ -192,7 +198,6 @@ export function GameScreen() {
 
       {/* Стол */}
       <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4">
-        {/* Колода + козырь */}
         {deck.length > 0 && (
           <div className="flex items-center gap-1 mb-2">
             {trumpCard && (
@@ -205,7 +210,6 @@ export function GameScreen() {
           </div>
         )}
 
-        {/* Карты на столе */}
         {table.length > 0 ? (
           <div className="flex flex-wrap gap-3 justify-center">
             {table.map(ac => {
@@ -254,7 +258,6 @@ export function GameScreen() {
         )}
       </div>
 
-      {/* Подсказка */}
       {amIDefender && selectedCard && (
         <div className="text-center text-yellow-300 text-sm py-1">
           Нажмите на карту атаки, чтобы отбить {RANK_NAMES[selectedCard.rank]}{SUIT_SYMBOLS[selectedCard.suit]}
@@ -283,7 +286,6 @@ export function GameScreen() {
         ))}
       </div>
 
-      {/* Лог */}
       {lastAction && (
         <div className="text-center text-green-200/70 text-xs py-1 bg-black/20">{lastAction}</div>
       )}
