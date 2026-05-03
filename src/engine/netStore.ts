@@ -1,6 +1,7 @@
 /**
  * Zustand store для сетевой игры «Дурак»
  * Хост — авторитет. Хост рассылает full_state, гость отправляет actions.
+ * Хост = игрок 0, Гость = игрок 1 (всегда)
  */
 
 import { create } from 'zustand';
@@ -16,17 +17,12 @@ interface NetStore {
   connected: boolean;
   error: string | null;
 
-  /** Хост: создаёт игру и начинает рассылать состояние */
   initHost: (network: NetworkManager) => void;
-  /** Гость: подключается и слушает состояние от хоста */
   initGuest: (network: NetworkManager) => void;
-  /** Гость: отправить действие хосту */
   sendAction: (action: NetworkAction) => void;
-  /** Отключиться от сетевой игры */
   disconnect: () => void;
 }
 
-/** Подписка на изменения gameStore для рассылки хостом */
 let unsubscribeGameStore: (() => void) | null = null;
 
 export const useNetStore = create<NetStore>((set, get) => ({
@@ -40,17 +36,15 @@ export const useNetStore = create<NetStore>((set, get) => ({
   initHost: (network: NetworkManager) => {
     const myPlayerIndex = 0; // хост = игрок 0
 
-    // Подписка на входящие действия от гостя
+    // Хост получает actions от гостя
     network.onData((data) => {
       const msg = data as { type: string; action?: NetworkAction };
       if (msg.type === 'action' && msg.action) {
         executeAction(msg.action);
-        // После выполнения — рассылаем обновлённое состояние
-        broadcastState(network);
       }
     });
 
-    // Подписка на отключение
+    // Подписка на события сети
     network.on((event) => {
       if (event.type === 'disconnected') {
         set({ connected: false });
@@ -60,18 +54,12 @@ export const useNetStore = create<NetStore>((set, get) => ({
       }
     });
 
-    // Подписка на изменения gameStore — при каждом изменении отправлять состояние гостю
+    // При каждом изменении gameStore — рассылать состояние гостю
     unsubscribeGameStore = useGameStore.subscribe((state) => {
       broadcastState(network, state);
     });
 
-    set({
-      network,
-      role: 'host',
-      myPlayerIndex,
-      connected: true,
-      error: null,
-    });
+    set({ network, role: 'host', myPlayerIndex, connected: true, error: null });
   },
 
   initGuest: (network: NetworkManager) => {
@@ -85,7 +73,6 @@ export const useNetStore = create<NetStore>((set, get) => ({
       }
     });
 
-    // Подписка на отключение
     network.on((event) => {
       if (event.type === 'disconnected') {
         set({ connected: false });
@@ -95,13 +82,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
       }
     });
 
-    set({
-      network,
-      role: 'guest',
-      myPlayerIndex,
-      connected: true,
-      error: null,
-    });
+    set({ network, role: 'guest', myPlayerIndex, connected: true, error: null });
   },
 
   sendAction: (action: NetworkAction) => {
@@ -116,38 +97,27 @@ export const useNetStore = create<NetStore>((set, get) => ({
       unsubscribeGameStore = null;
     }
     const { network } = get();
-    if (network) {
-      network.disconnect();
-    }
-    set({
-      network: null,
-      role: null,
-      myPlayerIndex: -1,
-      gameState: null,
-      connected: false,
-      error: null,
-    });
+    if (network) network.disconnect();
+    set({ network: null, role: null, myPlayerIndex: -1, gameState: null, connected: false, error: null });
   },
 }));
 
-// ─── Вспомогательные функции ───
+// ─── Helpers ───
 
-/** Хост выполняет действие гостя через gameStore */
+/** Хост выполняет действие гостя (игрок 1) через gameStore */
 function executeAction(action: NetworkAction) {
   const store = useGameStore.getState();
+  const guestIndex = 1; // гость всегда игрок 1
 
   switch (action.type) {
     case 'attack': {
-      const card = findCardInHand(store, action.cardId, store.attackerIndex === 0 ? 1 : 0);
+      const card = store.players[guestIndex]?.hand.find(c => c.id === action.cardId);
       if (card) store.attack(card);
       break;
     }
     case 'defend': {
-      const attackCard = store.table.find(ac => ac.attackCard.id === action.attackCardId && !ac.defendCard);
-      const defendCard = findCardInHand(store, action.defendCardId, store.attackerIndex === 0 ? 1 : 0);
-      if (attackCard && defendCard) {
-        store.defend(action.attackCardId, defendCard);
-      }
+      const defendCard = store.players[guestIndex]?.hand.find(c => c.id === action.defendCardId);
+      if (defendCard) store.defend(action.attackCardId, defendCard);
       break;
     }
     case 'take': {
@@ -161,29 +131,15 @@ function executeAction(action: NetworkAction) {
   }
 }
 
-/** Найти карту в руке игрока по ID */
-function findCardInHand(
-  store: ReturnType<typeof useGameStore.getState>,
-  cardId: string,
-  playerIndex: number
-) {
-  return store.players[playerIndex]?.hand.find(c => c.id === cardId) ?? null;
-}
-
-/** Рассылка полного состояния гостю */
+/** Рассылка состояния гостю. Карты хоста скрываются. */
 function broadcastState(network: NetworkManager, state?: GameState) {
   const s = state ?? useGameStore.getState();
-  // Для гостя скрываем карты хоста (игрок 0)
   const guestState: GameState = {
     ...s,
     players: [
-      { ...s.players[0], hand: [] }, // скрываем карты хоста
-      s.players[1],
+      { ...s.players[0], hand: [] },  // скрываем карты хоста
+      s.players[1],                     // гость видит свои карты
     ],
   };
-  network.send({
-    type: 'full_state',
-    state: guestState,
-    myPlayerIndex: 1,
-  });
+  network.send({ type: 'full_state', state: guestState, myPlayerIndex: 1 });
 }
