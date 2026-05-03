@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+/* Дурак — карточная игра */
+:root {
+  --card-width: 70px;
+  --card-height: 100px;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: #1a472a;
+  color: white;
+  min-height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Карта стола — зелёный сукно */
+.table-bg {
+  background: radial-gradient(ellipse at center, #2d5a3d 0%, #1a472a 60%, #0f2e1a 100%);
+}
+
+/* Анимация подкидывания карты */
+@keyframes card-play {
+  from {
+    transform: translateY(-100px) scale(0.5) rotate(20deg);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes card-take {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.8) translateY(80px);
+    opacity: 0;
+  }
+}
+
+@keyframes suit-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.card-play {
+  animation: card-play 0.4s ease-out forwards;
+}
+
+.card-take {
+  animation: card-take 0.3s ease-in forwards;
+}
+
+.suit-pulse {
+  animation: suit-pulse 2s ease-in-out infinite;
+}
+
+/* Стиль карт */
+.playing-card {
+  width: var(--card-width);
+  height: var(--card-height);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.playing-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+}
+
+.playing-card.selected {
+  transform: translateY(-20px);
+  box-shadow: 0 12px 30px rgba(255,215,0,0.5);
+  border: 2px solid gold;
+}
+
+.playing-card.red {
+  color: #d32f2f;
+}
+
+.playing-card.black {
+  color: #212121;
+}
+
+/* Рубашка карты */
+.card-back {
+  width: var(--card-width);
+  height: var(--card-height);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1a237e 25%, #283593 25%, #283593 50%, #1a237e 50%, #1a237e 75%, #283593 75%);
+  background-size: 14px 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  border: 2px solid #3949ab;
+}
+
+/* Мини-карта (для маленьких карт в руке) */
+.mini-card {
+  --card-width: 50px;
+  --card-height: 72px;
+  font-size: 0.75rem;
+}
+
+.mini-card .playing-card {
+  width: 50px;
+  height: 72px;
+}
+
+/* Козырь — свечение */
+.trump-card {
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
+  border: 2px solid rgba(255, 215, 0, 0.8);
+}
+
+/* Кнопки */
+.btn {
+  padding: 0.5rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: white;
+  border: none;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: white;
+  border: none;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+.btn-success {
+  background: #16a34a;
+  color: white;
+  border: none;
+}
+
+.btn-success:hover {
+  background: #15803d;
+}
+
+/* Адаптив */
+@media (max-width: 640px) {
+  :root {
+    --card-width: 52px;
+    --card-height: 76px;
+  }
+  
+  .mini-card {
+    --card-width: 40px;
+    --card-height: 58px;
+  }
+}
