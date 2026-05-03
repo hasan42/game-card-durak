@@ -145,7 +145,7 @@ export function GameScreen() {
   return (
     <div className="table-bg min-h-screen flex flex-col h-screen">
       {/* Верхняя панель */}
-      <div className="flex justify-between items-center px-3 py-2 bg-black/30 text-sm">
+      <div className="top-panel flex justify-between items-center px-3 py-2 bg-black/30 text-sm">
         <div className="text-green-200">
           Козырь: <span className="text-yellow-300 font-bold">{SUIT_SYMBOLS[trumpSuit]} {SUIT_NAMES[trumpSuit]}</span>
         </div>
@@ -237,7 +237,7 @@ export function GameScreen() {
       )}
 
       {/* Моя рука */}
-      <div className="flex justify-center gap-1 px-4 py-3 bg-black/30 min-h-[100px] flex-wrap items-end">
+      <div className="player-hand flex justify-start gap-1 px-4 py-3 bg-black/30 min-h-[100px] flex-wrap items-end">
         {myHand.map(card => (
           <CardComponent
             key={card.id}
