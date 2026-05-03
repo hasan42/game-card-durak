@@ -1,37 +1,63 @@
 /**
  * PeerJS сетевой модуль для игры «Дурак»
- * Подключение P2P через WebRTC с сигнальным сервером PeerJS
+ * P2P через WebRTC с сигнальным сервером PeerJS
+ *
+ * API: EventEmitter-стиль — подписка через on()/onData(), отправка через send()
  */
 
 import Peer from 'peerjs';
 
 export type NetworkRole = 'host' | 'guest';
 
-export interface NetworkMessage {
-  type: 'game_state' | 'action' | 'chat' | 'ready' | 'error' | 'join' | 'leave';
-  payload: any;
+export type NetworkEventType = 'connected' | 'disconnected' | 'data' | 'error';
+
+export interface NetworkEvent {
+  type: NetworkEventType;
+  payload?: any;
 }
 
-export interface NetworkCallbacks {
-  onConnected: (role: NetworkRole, peerId: string) => void;
-  onDisconnected: () => void;
-  onMessage: (message: NetworkMessage) => void;
-  onError: (error: Error) => void;
-}
+type Listener = (event: NetworkEvent) => void;
 
 export class NetworkManager {
   private peer: Peer | null = null;
   private connection: any | null = null;
-  private callbacks: NetworkCallbacks;
   private myId: string = '';
   private myRole: NetworkRole | null = null;
   private isHost: boolean = false;
+  private listeners: Listener[] = [];
 
-  constructor(callbacks: NetworkCallbacks) {
-    this.callbacks = callbacks;
+  // ─── EventEmitter ───
+
+  /** Подписаться на все события */
+  on(listener: Listener): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
   }
 
-  /** Создать комнату (хост) */
+  /** Подписка только на data-события (входящие сообщения) */
+  onData(callback: (data: any) => void): () => void {
+    return this.on((event) => {
+      if (event.type === 'data') {
+        callback(event.payload);
+      }
+    });
+  }
+
+  private emit(event: NetworkEvent): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(event);
+      } catch (e) {
+        console.error('[Network] Listener error:', e);
+      }
+    }
+  }
+
+  // ─── Подключение ───
+
+  /** Создать комнату (хост). Resolves с room ID. */
   async host(): Promise<string> {
     return new Promise((resolve, reject) => {
       this.peer = new Peer();
@@ -46,12 +72,7 @@ export class NetworkManager {
           console.log('[Network] Guest connected:', conn.peer);
           this.connection = conn;
           this.setupConnection(conn);
-          this.callbacks.onConnected('host', conn.peer);
-
-          // Отправить готовность
-          conn.on('open', () => {
-            conn.send({ type: 'ready', payload: { role: 'host' } });
-          });
+          this.emit({ type: 'connected', payload: { role: 'host' } });
         });
 
         resolve(id);
@@ -59,12 +80,12 @@ export class NetworkManager {
 
       this.peer.on('error', (err) => {
         console.error('[Network] Host error:', err);
-        this.callbacks.onError(err);
+        this.emit({ type: 'error', payload: err });
         reject(err);
       });
 
       this.peer.on('disconnected', () => {
-        this.callbacks.onDisconnected();
+        this.emit({ type: 'disconnected' });
       });
     });
   }
@@ -86,20 +107,20 @@ export class NetworkManager {
         conn.on('open', () => {
           console.log('[Network] Connected to host');
           this.setupConnection(conn);
-          conn.send({ type: 'join', payload: { peerId: id } });
-          this.callbacks.onConnected('guest', roomId);
+          this.emit({ type: 'connected', payload: { role: 'guest' } });
           resolve();
         });
 
         conn.on('error', (err) => {
           console.error('[Network] Connection error:', err);
+          this.emit({ type: 'error', payload: err });
           reject(err);
         });
       });
 
       this.peer.on('error', (err) => {
         console.error('[Network] Guest error:', err);
-        this.callbacks.onError(err);
+        this.emit({ type: 'error', payload: err });
         reject(err);
       });
     });
@@ -107,28 +128,31 @@ export class NetworkManager {
 
   private setupConnection(conn: any) {
     conn.on('data', (data: any) => {
-      const msg = data as NetworkMessage;
-      this.callbacks.onMessage(msg);
+      this.emit({ type: 'data', payload: data });
     });
 
     conn.on('close', () => {
       console.log('[Network] Connection closed');
       this.connection = null;
-      this.callbacks.onDisconnected();
+      this.emit({ type: 'disconnected' });
     });
   }
 
-  /** Отправить сообщение */
-  send(message: NetworkMessage): boolean {
-    if (!this.connection || !this.connection.open) {
+  /** Отправить данные по сети */
+  send(data: any): boolean {
+    if (!this.connection) {
       console.warn('[Network] No connection, cannot send');
       return false;
     }
-    this.connection.send(message);
+    if (this.connection.open === false) {
+      console.warn('[Network] Connection not open, cannot send');
+      return false;
+    }
+    this.connection.send(data);
     return true;
   }
 
-  /** Отключиться */
+  /** Отключиться и уничтожить соединение */
   disconnect() {
     if (this.connection) {
       this.connection.close();
@@ -139,7 +163,10 @@ export class NetworkManager {
       this.peer = null;
     }
     this.myRole = null;
+    this.listeners = [];
   }
+
+  // ─── Геттеры ───
 
   get role(): NetworkRole | null {
     return this.myRole;
