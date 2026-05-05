@@ -1,77 +1,119 @@
-<<<<<<< HEAD
-# game-card-durak
-=======
-# React + TypeScript + Vite
+# 🃏 Дурак — Карточная игра
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Классическая карточная игра «Дурак» на 36 карт. Играйте против AI, с другом на одном устройстве (hot-seat) или по сети.
 
-Currently, two official plugins are available:
+## 🎮 Режимы игры
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Режим | Описание | Игроков |
+|-------|----------|---------|
+| 🤖 Против компьютера | AI с улучшенной стратегией | 2-6 |
+| 👥 Hot-seat | На одном устройстве | 2-6 |
+| 🌐 По сети | Онлайн через интернет или локальную сеть | 2-6 |
 
-## React Compiler
+## 🌐 Сетевая игра
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Firebase (Интернет) ☁️
+- Играйте из любой точки мира
+- Код комнаты для подключения
+- 2-6 игроков
+- Автоматическая синхронизация через Firestore
 
-## Expanding the ESLint configuration
+### PeerJS (Локальная сеть) 🏠
+- Играйте по Wi-Fi дома
+- Без интернета
+- 2 игрока
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### VK Mini Apps 📱
+- Интеграция с VK
+- Приглашение друзей через VK Bridge
+- Работает поверх Firebase
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 🚀 Быстрый старт
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Локальная разработка
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Сборка
+```bash
+npm run build
 ```
->>>>>>> 6191887 (Initial commit: Дурак card game — game engine, types, cards, UI, hot-seat mode)
+
+### Деплой на GitHub Pages
+```bash
+npm run deploy
+```
+
+## ⚙️ Настройка Firebase
+
+1. Создайте проект в [Firebase Console](https://console.firebase.google.com)
+2. Включите Firestore Database
+3. Скопируйте конфигурацию из Project Settings → General → Your apps → Web
+4. Заполните `.env` файл:
+```bash
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
+VITE_FIREBASE_APP_ID=1:123456789:web:abc123
+```
+
+### Правила Firestore (для тестирования)
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+## 🛠️ Технологии
+
+- React 19 + TypeScript
+- Vite
+- Tailwind CSS
+- Zustand (стейт-менеджмент)
+- PeerJS (P2P)
+- Firebase Firestore (онлайн)
+- VK Bridge (VK Mini Apps)
+
+## 📱 VK Mini Apps
+
+### Настройка
+1. Создайте приложение в [VK Dev](https://dev.vk.com/mini-apps)
+2. Получите `APP_ID`
+3. Добавьте в `.env`:
+```bash
+VITE_VK_APP_ID=your_vk_app_id
+```
+4. Укажите URL загрузки в настройках VK: `https://your-github-pages-url/vk.html`
+
+## 📄 Структура проекта
+
+```
+src/
+  components/
+    GameScreen.tsx      # Главный экран игры
+    NetworkScreen.tsx   # Экран сетевой игры
+    CardComponent.tsx   # Компонент карты
+  engine/
+    store.ts            # Игровой стейт (Zustand)
+    cards.ts            # Карты и масти
+    ai.ts               # AI противник
+    network.ts          # PeerJS сеть
+    firebase.ts         # Firebase конфиг
+    firebaseNetwork.ts  # Firebase сетевой менеджер
+    vkNetwork.ts        # VK Mini Apps интеграция
+    netStore.ts         # Сетевой стейт
+  vk.ts                 # VK Bridge интеграция
+```
+
+## 📝 Лицензия
+
+MIT
