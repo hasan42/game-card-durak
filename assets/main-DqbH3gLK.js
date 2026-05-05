@@ -15209,9 +15209,6 @@ var useNetStore = create((set, get) => ({
 			if (event.type === "disconnected") set({ connected: false });
 			if (event.type === "error") set({ error: String(event.payload?.message || event.payload || "Network error") });
 		});
-		unsubscribeGameStore = useGameStore.subscribe((state) => {
-			broadcastState(network, state);
-		});
 		set({
 			network,
 			backend,
@@ -15221,6 +15218,11 @@ var useNetStore = create((set, get) => ({
 			error: null,
 			roomId: "roomId" in network ? network.roomId : null
 		});
+		setTimeout(() => {
+			unsubscribeGameStore = useGameStore.subscribe((state) => {
+				broadcastState(network, state);
+			});
+		}, 0);
 	},
 	initGuest: (network, backend) => {
 		network.onData((data) => {
