@@ -1,28 +1,24 @@
-import { G as initializeApp, K as registerVersion, U as getFirestore, V as doc, W as serverTimestamp, _ as updateDoc, d as getDoc, g as setDoc, l as deleteDoc, p as onSnapshot, z as collection } from "./index.esm-ZWLmylet.js";
-//#region node_modules/firebase/app/dist/esm/index.esm.js
-/**
-* @license
-* Copyright 2020 Google LLC
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
-registerVersion("firebase", "12.12.1", "app");
-//#endregion
+import { n as __exportAll } from "./rolldown-runtime-BZ_oHznj.js";
+import { a as setDoc, c as doc, d as initializeApp, i as onSnapshot, l as getFirestore, n as deleteDoc, o as updateDoc, r as getDoc, s as collection, u as serverTimestamp } from "./firebase-vendor-DlK28w6c.js";
 //#region src/engine/firebase.ts
 /**
 * Firebase конфигурация для сетевой игры «Дурак»
 * Firestore — комнаты, игроки, состояние игры
 */
+var firebase_exports = /* @__PURE__ */ __exportAll({
+	createRoom: () => createRoom,
+	getDb: () => getDb,
+	getPlayerRef: () => getPlayerRef,
+	getPlayersRef: () => getPlayersRef,
+	getRoom: () => getRoom,
+	getRoomRef: () => getRoomRef,
+	joinRoom: () => joinRoom,
+	leaveRoom: () => leaveRoom,
+	roomExists: () => roomExists,
+	subscribePlayers: () => subscribePlayers,
+	subscribeRoom: () => subscribeRoom,
+	updateGameState: () => updateGameState
+});
 var firebaseConfig = {
 	apiKey: "AIzaSyA9dgeYI_Axx5gqgPacoBf_HGPncwT8qoU",
 	authDomain: "game-card-durak.firebaseapp.com",
@@ -139,4 +135,4 @@ async function roomExists(roomId) {
 	return (await getDoc(getRoomRef(roomId))).exists();
 }
 //#endregion
-export { getRoom as a, leaveRoom as c, subscribeRoom as d, updateGameState as f, getPlayersRef as i, roomExists as l, getDb as n, getRoomRef as o, getPlayerRef as r, joinRoom as s, createRoom as t, subscribePlayers as u };
+export { roomExists as a, updateGameState as c, leaveRoom as i, firebase_exports as n, subscribePlayers as o, joinRoom as r, subscribeRoom as s, createRoom as t };

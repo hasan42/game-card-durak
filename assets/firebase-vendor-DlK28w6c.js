@@ -1,3 +1,4 @@
+import { n as __exportAll } from "./rolldown-runtime-BZ_oHznj.js";
 //#region node_modules/@firebase/util/dist/postinstall.mjs
 var getDefaultsFromPostinstall = () => void 0;
 //#endregion
@@ -2056,6 +2057,25 @@ function registerCoreComponents(variant) {
 * @packageDocumentation
 */
 registerCoreComponents("");
+//#endregion
+//#region node_modules/firebase/app/dist/esm/index.esm.js
+/**
+* @license
+* Copyright 2020 Google LLC
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+registerVersion("firebase", "12.12.1", "app");
 //#endregion
 //#region node_modules/@firebase/webchannel-wrapper/dist/bloom-blob/esm/bloom_blob_es2018.js
 var commonjsGlobal$1 = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
@@ -16033,4 +16053,29 @@ function onSnapshot(t, ...e) {
 	}), "PUBLIC").setMultipleInstances(!0)), registerVersion(Ut, Ht, h), registerVersion(Ut, Ht, "esm2020");
 })();
 //#endregion
-export { GeoPoint as A, connectFirestoreEmulator as B, DocumentKey as C, FieldValue as D, FieldPath$1 as E, __PRIVATE_EmptyAuthCredentialsProvider as F, initializeApp as G, ensureFirestoreConfigured as H, __PRIVATE_cast as I, registerVersion as K, __PRIVATE_logWarn as L, Timestamp as M, VectorValue as N, Firestore as O, __PRIVATE_AutoId as P, __PRIVATE_validateIsNotUsedTogether as R, DatabaseId as S, FieldPath as T, getFirestore as U, doc as V, serverTimestamp as W, updateDoc as _, QueryFieldFilterConstraint as a, Bytes as b, SnapshotMetadata as c, getDoc as d, getDocs as f, setDoc as g, query as h, QueryDocumentSnapshot as i, Query as j, FirestoreError as k, deleteDoc as l, orderBy as m, QueryCompositeFilterConstraint as n, QueryOrderByConstraint as o, onSnapshot as p, QueryConstraint as r, QuerySnapshot as s, DocumentSnapshot as t, executeWrite as u, AbstractUserDataWriter as v, DocumentReference as w, CollectionReference as x, ByteString as y, collection as z };
+//#region node_modules/firebase/firestore/dist/esm/index.esm.js
+var index_esm_exports = /* @__PURE__ */ __exportAll({
+	CACHE_SIZE_UNLIMITED: () => -1,
+	DocumentSnapshot: () => DocumentSnapshot,
+	QueryCompositeFilterConstraint: () => QueryCompositeFilterConstraint,
+	QueryConstraint: () => QueryConstraint,
+	QueryDocumentSnapshot: () => QueryDocumentSnapshot,
+	QueryFieldFilterConstraint: () => QueryFieldFilterConstraint,
+	QueryOrderByConstraint: () => QueryOrderByConstraint,
+	QuerySnapshot: () => QuerySnapshot,
+	SnapshotMetadata: () => SnapshotMetadata,
+	collection: () => collection,
+	deleteDoc: () => deleteDoc,
+	doc: () => doc,
+	executeWrite: () => executeWrite,
+	getDoc: () => getDoc,
+	getDocs: () => getDocs,
+	onSnapshot: () => onSnapshot,
+	orderBy: () => orderBy,
+	query: () => query,
+	serverTimestamp: () => serverTimestamp,
+	setDoc: () => setDoc,
+	updateDoc: () => updateDoc
+});
+//#endregion
+export { setDoc as a, doc as c, initializeApp as d, onSnapshot as i, getFirestore as l, deleteDoc as n, updateDoc as o, getDoc as r, collection as s, index_esm_exports as t, serverTimestamp as u };
