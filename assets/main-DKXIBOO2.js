@@ -16245,11 +16245,13 @@ function GameScreen() {
 	const isVK = isVKEnvironment();
 	if (showNetwork && !isNetworkMode) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(NetworkScreen, {
 		onConnected: (network, role, backend) => {
-			setShowNetwork(false);
-			if (role === "host") {
-				store.startGame("network");
-				netStore.initHost(network, backend);
-			} else netStore.initGuest(network, backend);
+			setTimeout(() => {
+				setShowNetwork(false);
+				if (role === "host") {
+					store.startGame("network");
+					netStore.initHost(network, backend);
+				} else netStore.initGuest(network, backend);
+			}, 0);
 		},
 		onBack: () => setShowNetwork(false)
 	});
