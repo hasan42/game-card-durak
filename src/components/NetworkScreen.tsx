@@ -1,22 +1,30 @@
 /**
  * Экран сетевой игры — создание/подключение к комнате
+ * Поддержка PeerJS (локальная сеть) и Firebase (интернет)
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { NetworkManager } from '../engine/network';
+import { FirebaseNetworkManager } from '../engine/firebaseNetwork';
+import { VKNetworkManager } from '../engine/vkNetwork';
+import type { NetworkBackend } from '../engine/netStore';
+
+export type NetworkProvider = 'firebase' | 'peerjs' | 'vk';
 
 interface NetworkScreenProps {
-  onConnected: (network: NetworkManager, role: 'host' | 'guest') => void;
+  onConnected: (network: NetworkManager | FirebaseNetworkManager | VKNetworkManager, role: 'host' | 'guest', backend: NetworkBackend) => void;
   onBack: () => void;
 }
 
 export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
-  const [mode, setMode] = useState<'choose' | 'host' | 'join'>('choose');
+  const [mode, setMode] = useState<'choose' | 'backend' | 'host' | 'join'>('choose');
+  const [provider, setProvider] = useState<NetworkProvider>('firebase');
   const [roomId, setRoomId] = useState('');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [generatedRoomId, setGeneratedRoomId] = useState('');
-  const networkRef = useRef<NetworkManager | null>(null);
+  const [playerCount, setPlayerCount] = useState(2);
+  const networkRef = useRef<NetworkManager | FirebaseNetworkManager | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -31,28 +39,90 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     setStatus('Создание комнаты...');
     setError('');
 
-    const network = new NetworkManager();
-    networkRef.current = network;
-
-    // Listen for guest connection
-    network.on((event) => {
-      if (event.type === 'connected' && network.role === 'host') {
-        setStatus('Игрок подключён! Начинаем...');
-        setTimeout(() => onConnected(network, 'host'), 300);
-      }
-      if (event.type === 'disconnected') {
-        setError('Соединение разорвано');
-      }
-      if (event.type === 'error') {
-        setError(String(event.payload?.message || event.payload || 'Ошибка'));
-        setStatus('');
-      }
-    });
-
     try {
-      const id = await network.host();
-      setGeneratedRoomId(id);
-      setStatus(`Комната создана! Ожидание второго игрока...`);
+      if (provider === 'firebase') {
+        const network = new FirebaseNetworkManager();
+        networkRef.current = network;
+
+        network.on((event) => {
+          if (event.type === 'connected' && network.role === 'host') {
+            setStatus('Комната создана! Ожидание игроков...');
+            setGeneratedRoomId(network.roomId);
+          }
+          if (event.type === 'disconnected') {
+            setError('Соединение разорвано');
+          }
+          if (event.type === 'error') {
+            setError(String(event.payload?.message || event.payload || 'Ошибка'));
+            setStatus('');
+          }
+        });
+
+        const id = await network.host(playerCount);
+        setGeneratedRoomId(id);
+        setStatus(`Комната ${id} создана! Ожидание игроков...`);
+        
+        // Ждём подключения второго игрока
+        const checkInterval = setInterval(() => {
+          if (network.playerList.length >= 2) {
+            clearInterval(checkInterval);
+            setStatus('Игроки подключены! Начинаем...');
+            setTimeout(() => onConnected(network, 'host', 'firebase'), 300);
+          }
+        }, 1000);
+      } else if (provider === 'vk') {
+        const network = new VKNetworkManager();
+        networkRef.current = network;
+
+        network.on((event) => {
+          if (event.type === 'connected' && network.role === 'host') {
+            setStatus('Комната создана! Приглашение отправлено в VK...');
+            setGeneratedRoomId(network.roomId);
+          }
+          if (event.type === 'disconnected') {
+            setError('Соединение разорвано');
+          }
+          if (event.type === 'error') {
+            setError(String(event.payload?.message || event.payload || 'Ошибка'));
+            setStatus('');
+          }
+        });
+
+        const id = await network.hostWithVKInvite(playerCount);
+        setGeneratedRoomId(id);
+        setStatus(`Комната ${id} создана! Ожидание друзей из VK...`);
+        
+        // Ждём подключения
+        const checkInterval = setInterval(() => {
+          if (network.playerList.length >= 2) {
+            clearInterval(checkInterval);
+            setStatus('Друг подключился! Начинаем...');
+            setTimeout(() => onConnected(network, 'host', 'firebase'), 300);
+          }
+        }, 1000);
+      } else {
+        // PeerJS
+        const network = new NetworkManager();
+        networkRef.current = network;
+
+        network.on((event) => {
+          if (event.type === 'connected' && network.role === 'host') {
+            setStatus('Игрок подключён! Начинаем...');
+            setTimeout(() => onConnected(network, 'host', 'peerjs'), 300);
+          }
+          if (event.type === 'disconnected') {
+            setError('Соединение разорвано');
+          }
+          if (event.type === 'error') {
+            setError(String(event.payload?.message || event.payload || 'Ошибка'));
+            setStatus('');
+          }
+        });
+
+        const id = await network.host();
+        setGeneratedRoomId(id);
+        setStatus(`Комната создана! Ожидание второго игрока...`);
+      }
     } catch (err: any) {
       setError(err.message || 'Ошибка создания комнаты');
       setStatus('');
@@ -67,20 +137,39 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     setStatus('Подключение...');
     setError('');
 
-    const network = new NetworkManager();
-    networkRef.current = network;
-
-    network.on((event) => {
-      if (event.type === 'error') {
-        setError(String(event.payload?.message || event.payload || 'Ошибка подключения'));
-        setStatus('');
-      }
-    });
-
     try {
-      await network.join(roomId.trim());
-      setStatus('Подключено! Начинаем...');
-      setTimeout(() => onConnected(network, 'guest'), 300);
+      if (provider === 'firebase' || provider === 'vk') {
+        const network = provider === 'vk' ? new VKNetworkManager() : new FirebaseNetworkManager();
+        networkRef.current = network;
+
+        network.on((event) => {
+          if (event.type === 'connected' && network.role === 'guest') {
+            setStatus('Подключено! Начинаем...');
+            setTimeout(() => onConnected(network, 'guest', 'firebase'), 300);
+          }
+          if (event.type === 'error') {
+            setError(String(event.payload?.message || event.payload || 'Ошибка подключения'));
+            setStatus('');
+          }
+        });
+
+        await network.join(roomId.trim());
+      } else {
+        // PeerJS
+        const network = new NetworkManager();
+        networkRef.current = network;
+
+        network.on((event) => {
+          if (event.type === 'error') {
+            setError(String(event.payload?.message || event.payload || 'Ошибка подключения'));
+            setStatus('');
+          }
+        });
+
+        await network.join(roomId.trim());
+        setStatus('Подключено! Начинаем...');
+        setTimeout(() => onConnected(network, 'guest', 'peerjs'), 300);
+      }
     } catch (err: any) {
       setError(err.message || 'Ошибка подключения');
       setStatus('');
@@ -103,21 +192,18 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     setError('');
   };
 
+  // ====== Выбор бэкенда ======
   if (mode === 'choose') {
     return (
       <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-8">
         <div className="text-7xl mb-4">🌐</div>
         <h1 className="text-4xl font-bold text-yellow-300 drop-shadow-lg">Сетевая игра</h1>
         <p className="text-green-200 text-center max-w-sm">
-          Играйте с другом через интернет.<br />
-          Один создаёт комнату, другой подключается по коду.
+          Играйте с друзьями через интернет или локальную сеть.
         </p>
         <div className="flex flex-col gap-3 mt-4">
-          <button onClick={() => { setMode('host'); handleHost(); }} className="btn btn-primary text-xl px-8 py-3">
-            🏠 Создать комнату
-          </button>
-          <button onClick={() => setMode('join')} className="btn bg-green-700 hover:bg-green-600 text-white text-xl px-8 py-3">
-            🔗 Подключиться по коду
+          <button onClick={() => setMode('backend')} className="btn btn-primary text-xl px-8 py-3">
+            🎮 Играть онлайн
           </button>
           <button onClick={onBack} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2">
             ← Назад
@@ -127,11 +213,72 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     );
   }
 
+  // ====== Выбор бэкенда ======
+  if (mode === 'backend') {
+    return (
+      <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
+        <div className="text-6xl">🔧</div>
+        <h2 className="text-3xl font-bold text-yellow-300">Выберите тип подключения</h2>
+        
+        <div className="flex flex-col gap-4 w-full max-w-sm">
+          <button 
+            onClick={() => { setProvider('firebase'); setMode('host'); handleHost(); }}
+            className="btn btn-primary text-lg px-6 py-4 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">☁️</span>
+              <div>
+                <div className="font-bold">Firebase (Интернет)</div>
+                <div className="text-sm opacity-80">Играйте из любой точки мира</div>
+              </div>
+            </div>
+          </button>
+          
+          <button 
+            onClick={() => { setProvider('peerjs'); setMode('host'); handleHost(); }}
+            className="btn bg-blue-700 hover:bg-blue-600 text-white text-lg px-6 py-4 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🏠</span>
+              <div>
+                <div className="font-bold">PeerJS (Локальная сеть)</div>
+                <div className="text-sm opacity-80">Играйте по Wi-Fi дома</div>
+              </div>
+            </div>
+          </button>
+
+          <button onClick={() => setMode('choose')} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 mt-2">
+            ← Назад
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ====== Создание комнаты ======
   if (mode === 'host') {
     return (
       <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
         <div className="text-6xl">🏠</div>
-        <h2 className="text-3xl font-bold text-yellow-300">Создание комнаты</h2>
+        <h2 className="text-3xl font-bold text-yellow-300">
+          {provider === 'firebase' ? 'Создание комнаты (Firebase)' : provider === 'vk' ? 'Создание комнаты (VK)' : 'Создание комнаты (PeerJS)'}
+        </h2>
+        
+        {provider === 'firebase' && (
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-green-200 text-sm">Игроков:</span>
+            {[2, 3, 4, 5, 6].map(n => (
+              <button
+                key={n}
+                onClick={() => setPlayerCount(n)}
+                className={`w-10 h-10 rounded-lg font-bold text-lg ${playerCount === n ? 'bg-yellow-500 text-black' : 'bg-frost-800 text-green-200 hover:bg-frost-700'}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
+        
         {generatedRoomId && (
           <div className="bg-black/40 rounded-xl p-6 text-center">
             <p className="text-green-300 text-sm mb-2">Код комнаты:</p>
@@ -146,7 +293,11 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
         {status && <p className="text-green-200 text-sm whitespace-pre-line text-center">{status}</p>}
         {error && <p className="text-red-400 text-sm">{error}</p>}
         <p className="text-green-300/60 text-sm text-center max-w-xs">
-          Отправьте код другу. Когда он подключится, игра начнётся автоматически.
+          {provider === 'firebase' 
+            ? 'Отправьте код друзьям. Когда все подключатся, игра начнётся.' 
+            : provider === 'vk'
+            ? 'Приглашение отправлено в VK. Дождитесь друзей.'
+            : 'Отправьте код другу. Когда он подключится, игра начнётся автоматически.'}
         </p>
         <button onClick={cancelHost} className="btn btn-danger px-6 py-2 mt-4">
           Отмена
@@ -155,17 +306,19 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     );
   }
 
-  // mode === 'join'
+  // ====== Подключение к комнате ======
   return (
     <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
       <div className="text-6xl">🔗</div>
-      <h2 className="text-3xl font-bold text-yellow-300">Подключение</h2>
+      <h2 className="text-3xl font-bold text-yellow-300">
+        {provider === 'firebase' ? 'Подключение (Firebase)' : provider === 'vk' ? 'Подключение (VK)' : 'Подключение (PeerJS)'}
+      </h2>
       <div className="bg-black/40 rounded-xl p-6 text-center">
         <p className="text-green-300 text-sm mb-3">Введите код комнаты:</p>
         <input
           type="text"
           value={roomId}
-          onChange={(e) => setRoomId(e.target.value)}
+          onChange={(e) => setRoomId(e.target.value.toUpperCase())}
           placeholder="Код комнаты"
           className="w-full text-center text-xl font-mono bg-frost-900 border border-frost-700 rounded-lg px-4 py-3 text-yellow-300 focus:outline-none focus:border-yellow-400"
           autoFocus

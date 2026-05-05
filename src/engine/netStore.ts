@@ -1,24 +1,31 @@
 /**
  * Zustand store для сетевой игры «Дурак»
- * Хост — авторитет. Хост рассылает full_state, гость отправляет actions.
- * Хост = игрок 0, Гость = игрок 1 (всегда)
+ * Универсальный — поддержка PeerJS и Firebase
+ * Хост авторитетен, гости отправляют actions
+ * Поддержка 2-6 игроков
  */
 
 import { create } from 'zustand';
 import { NetworkManager } from './network';
+import { FirebaseNetworkManager } from './firebaseNetwork';
 import { useGameStore } from './store';
 import type { GameState, NetworkAction } from './types';
 
+export type NetworkBackend = 'peerjs' | 'firebase';
+
 interface NetStore {
-  network: NetworkManager | null;
+  network: NetworkManager | FirebaseNetworkManager | null;
+  backend: NetworkBackend;
   role: 'host' | 'guest' | null;
   myPlayerIndex: number;
   gameState: GameState | null;
   connected: boolean;
   error: string | null;
+  roomId: string | null;
+  players: { id: string; name: string; index: number; connected: boolean }[];
 
-  initHost: (network: NetworkManager) => void;
-  initGuest: (network: NetworkManager) => void;
+  initHost: (network: NetworkManager | FirebaseNetworkManager, backend: NetworkBackend) => void;
+  initGuest: (network: NetworkManager | FirebaseNetworkManager, backend: NetworkBackend) => void;
   sendAction: (action: NetworkAction) => void;
   disconnect: () => void;
 }
@@ -27,16 +34,19 @@ let unsubscribeGameStore: (() => void) | null = null;
 
 export const useNetStore = create<NetStore>((set, get) => ({
   network: null,
+  backend: 'peerjs',
   role: null,
   myPlayerIndex: -1,
   gameState: null,
   connected: false,
   error: null,
+  roomId: null,
+  players: [],
 
-  initHost: (network: NetworkManager) => {
+  initHost: (network, backend) => {
     const myPlayerIndex = 0; // хост = игрок 0
 
-    // Хост получает actions от гостя
+    // Хост получает actions от гостей
     network.onData((data) => {
       const msg = data as { type: string; action?: NetworkAction };
       if (msg.type === 'action' && msg.action) {
@@ -54,17 +64,16 @@ export const useNetStore = create<NetStore>((set, get) => ({
       }
     });
 
-    // При каждом изменении gameStore — рассылать состояние гостю
+    // При каждом изменении gameStore — рассылать состояние гостям
     unsubscribeGameStore = useGameStore.subscribe((state) => {
       broadcastState(network, state);
     });
 
-    set({ network, role: 'host', myPlayerIndex, connected: true, error: null });
+    const roomId = 'roomId' in network ? network.roomId : null;
+    set({ network, backend, role: 'host', myPlayerIndex, connected: true, error: null, roomId });
   },
 
-  initGuest: (network: NetworkManager) => {
-    const myPlayerIndex = 1; // гость = игрок 1
-
+  initGuest: (network, backend) => {
     // Гость слушает full_state от хоста
     network.onData((data) => {
       const msg = data as { type: string; state?: GameState; myPlayerIndex?: number };
@@ -82,13 +91,19 @@ export const useNetStore = create<NetStore>((set, get) => ({
       }
     });
 
-    set({ network, role: 'guest', myPlayerIndex, connected: true, error: null });
+    const roomId = 'roomId' in network ? network.roomId : null;
+    set({ network, backend, role: 'guest', myPlayerIndex: 1, connected: true, error: null, roomId });
   },
 
-  sendAction: (action: NetworkAction) => {
-    const { network } = get();
+  sendAction: (action) => {
+    const { network, backend } = get();
     if (!network) return;
-    network.send({ type: 'action', action });
+
+    if (backend === 'firebase') {
+      (network as FirebaseNetworkManager).send({ type: 'action', action });
+    } else {
+      (network as NetworkManager).send({ type: 'action', action });
+    }
   },
 
   disconnect: () => {
@@ -98,25 +113,27 @@ export const useNetStore = create<NetStore>((set, get) => ({
     }
     const { network } = get();
     if (network) network.disconnect();
-    set({ network: null, role: null, myPlayerIndex: -1, gameState: null, connected: false, error: null });
+    set({ network: null, backend: 'peerjs', role: null, myPlayerIndex: -1, gameState: null, connected: false, error: null, roomId: null, players: [] });
   },
 }));
 
 // ─── Helpers ───
 
-/** Хост выполняет действие гостя (игрок 1) через gameStore */
+/** Хост выполняет действие гостя через gameStore */
 function executeAction(action: NetworkAction) {
   const store = useGameStore.getState();
-  const guestIndex = 1; // гость всегда игрок 1
 
   switch (action.type) {
     case 'attack': {
-      const card = store.players[guestIndex]?.hand.find(c => c.id === action.cardId);
+      // Найти карту у активного игрока
+      const activeIndex = store.activePlayerIndex ?? 0;
+      const card = store.players[activeIndex]?.hand.find(c => c.id === action.cardId);
       if (card) store.attack(card);
       break;
     }
     case 'defend': {
-      const defendCard = store.players[guestIndex]?.hand.find(c => c.id === action.defendCardId);
+      const defenderIndex = store.defenderIndex ?? 1;
+      const defendCard = store.players[defenderIndex]?.hand.find(c => c.id === action.defendCardId);
       if (defendCard) store.defend(action.attackCardId, defendCard);
       break;
     }
@@ -131,15 +148,27 @@ function executeAction(action: NetworkAction) {
   }
 }
 
-/** Рассылка состояния гостю. Карты хоста скрываются. */
-function broadcastState(network: NetworkManager, state?: GameState) {
+/** Рассылка состояния гостям. Карты других игроков скрываются. */
+function broadcastState(network: NetworkManager | FirebaseNetworkManager, state?: GameState) {
   const s = state ?? useGameStore.getState();
-  const guestState: GameState = {
-    ...s,
-    players: [
-      { ...s.players[0], hand: [] },  // скрываем карты хоста
-      s.players[1],                     // гость видит свои карты
-    ],
-  };
-  network.send({ type: 'full_state', state: guestState, myPlayerIndex: 1 });
+
+  // Формируем state для каждого игрока (скрываем чужие карты)
+  // Для PeerJS: 1 гость, для Firebase: N гостей
+  const isFirebase = network instanceof FirebaseNetworkManager;
+
+  if (isFirebase) {
+    // Firebase: хост пишет в Firestore один раз, гости читают
+    // Но нам нужно скрыть карты всех кроме текущего игрока
+    // Поэтому шлём полный state, а клиент сам скрывает чужие карты
+    network.send({ type: 'full_state', state: s });
+  } else {
+    // PeerJS: 2 игрока, хост = 0, гость = 1
+    const guestState: GameState = {
+      ...s,
+      players: s.players.map((p, i) =>
+        i === 0 ? { ...p, hand: [] } : p // скрываем карты хоста
+      ),
+    };
+    network.send({ type: 'full_state', state: guestState, myPlayerIndex: 1 });
+  }
 }

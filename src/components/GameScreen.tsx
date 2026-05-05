@@ -11,7 +11,10 @@ import { SUIT_SYMBOLS, RANK_NAMES, SUIT_NAMES } from '../engine/cards';
 import type { Card, GameState } from '../engine/types';
 import type { NetworkRole } from '../engine/network';
 import { NetworkManager } from '../engine/network';
+import { FirebaseNetworkManager } from '../engine/firebaseNetwork';
+import { VKNetworkManager } from '../engine/vkNetwork';
 import { isVKEnvironment } from '../vk';
+import type { NetworkBackend } from '../engine/netStore';
 
 export function GameScreen() {
   const store = useGameStore();
@@ -89,14 +92,14 @@ export function GameScreen() {
   if (showNetwork && !isNetworkMode) {
     return (
       <NetworkScreen
-        onConnected={(network: NetworkManager, role: NetworkRole) => {
+        onConnected={(network: NetworkManager | FirebaseNetworkManager | VKNetworkManager, role: NetworkRole, backend: NetworkBackend) => {
           setShowNetwork(false);
           // Инициализируем сетевой store
           if (role === 'host') {
             store.startGame('network');
-            netStore.initHost(network);
+            netStore.initHost(network, backend);
           } else {
-            netStore.initGuest(network);
+            netStore.initGuest(network, backend);
           }
         }}
         onBack={() => setShowNetwork(false)}
@@ -137,8 +140,13 @@ export function GameScreen() {
             🌐 По сети
           </button>
           {isVK && (
-            <div className="text-center text-sm text-blue-300 mt-2">
-              VK Mini App активен 👆
+            <button onClick={() => { setShowNetwork(true); }} className="btn bg-blue-600 hover:bg-blue-500 text-white text-xl px-8 py-3">
+              📱 VK Друзья
+            </button>
+          )}
+          {!isVK && (
+            <div className="text-center text-sm text-blue-300/60 mt-2">
+              VK Mini App доступен внутри VK
             </div>
           )}
         </div>
