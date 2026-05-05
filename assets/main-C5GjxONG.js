@@ -15899,7 +15899,7 @@ function NetworkScreen({ onConnected, onBack }) {
 				});
 				await network.join(roomId.trim());
 				setStatus("Подключено! Начинаем...");
-				requestAnimationFrame(() => onConnected(network, "guest", "firebase"));
+				onConnected(network, "guest", "firebase");
 			} else {
 				const network = new NetworkManager();
 				networkRef.current = network;
@@ -15911,7 +15911,7 @@ function NetworkScreen({ onConnected, onBack }) {
 				});
 				await network.join(roomId.trim());
 				setStatus("Подключено! Начинаем...");
-				requestAnimationFrame(() => onConnected(network, "guest", "peerjs"));
+				onConnected(network, "guest", "peerjs");
 			}
 		} catch (err) {
 			setError(err.message || "Ошибка подключения");
