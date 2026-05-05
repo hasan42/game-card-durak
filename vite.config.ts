@@ -8,10 +8,18 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: '/game-card-durak/',
   build: {
+    minify: false,
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
         vk: resolve(__dirname, 'vk.html'),
+      },
+      output: {
+        manualChunks: (id) => {
+          if (id.includes('node_modules/react')) return 'react-vendor';
+          if (id.includes('node_modules/firebase')) return 'firebase-vendor';
+          return null;
+        },
       },
     },
   },

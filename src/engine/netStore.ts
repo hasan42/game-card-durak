@@ -64,13 +64,16 @@ export const useNetStore = create<NetStore>((set, get) => ({
       }
     });
 
-    // При каждом изменении gameStore — рассылать состояние гостям
-    unsubscribeGameStore = useGameStore.subscribe((state) => {
-      broadcastState(network, state);
-    });
-
     const roomId = 'roomId' in network ? network.roomId : null;
     set({ network, backend, role: 'host', myPlayerIndex, connected: true, error: null, roomId });
+    
+    // Подписка на gameStore отложенно, чтобы не вызывать внутри React render
+    setTimeout(() => {
+      unsubscribeGameStore = useGameStore.subscribe((state) => {
+        // Используем state из callback, а не getState()
+        broadcastState(network, state);
+      });
+    }, 0);
   },
 
   initGuest: (network, backend) => {

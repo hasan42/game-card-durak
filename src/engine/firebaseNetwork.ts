@@ -118,7 +118,8 @@ export class FirebaseNetworkManager {
     this.startSubscriptions();
     this._connected = true;
 
-    this.emit({ type: 'connected', payload: { role: 'guest', roomId, playerIndex } });
+    // Не вызываем emit синхронно — пусть вызывающий код проверит статус
+    // this.emit({ type: 'connected', payload: { role: 'guest', roomId, playerIndex } });
   }
 
   /** Отключиться */

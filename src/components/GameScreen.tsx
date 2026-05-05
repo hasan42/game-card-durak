@@ -93,14 +93,16 @@ export function GameScreen() {
     return (
       <NetworkScreen
         onConnected={(network: NetworkManager | FirebaseNetworkManager | VKNetworkManager, role: NetworkRole, backend: NetworkBackend) => {
-          setShowNetwork(false);
-          // Инициализируем сетевой store
-          if (role === 'host') {
-            store.startGame('network');
-            netStore.initHost(network, backend);
-          } else {
-            netStore.initGuest(network, backend);
-          }
+          // Откладываем инициализацию, чтобы React закончил текущий рендер
+          queueMicrotask(() => {
+            // Инициализируем сетевой store
+            if (role === 'host') {
+              store.startGame('network');
+              netStore.initHost(network, backend);
+            } else {
+              netStore.initGuest(network, backend);
+            }
+          });
         }}
         onBack={() => setShowNetwork(false)}
       />

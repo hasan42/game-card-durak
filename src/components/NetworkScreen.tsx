@@ -143,10 +143,6 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
         networkRef.current = network;
 
         network.on((event) => {
-          if (event.type === 'connected' && network.role === 'guest') {
-            setStatus('Подключено! Начинаем...');
-            setTimeout(() => onConnected(network, 'guest', 'firebase'), 300);
-          }
           if (event.type === 'error') {
             setError(String(event.payload?.message || event.payload || 'Ошибка подключения'));
             setStatus('');
@@ -154,6 +150,8 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
         });
 
         await network.join(roomId.trim());
+        setStatus('Подключено! Начинаем...');
+        onConnected(network, 'guest', 'firebase');
       } else {
         // PeerJS
         const network = new NetworkManager();
@@ -168,7 +166,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
 
         await network.join(roomId.trim());
         setStatus('Подключено! Начинаем...');
-        setTimeout(() => onConnected(network, 'guest', 'peerjs'), 300);
+        onConnected(network, 'guest', 'peerjs');
       }
     } catch (err: any) {
       setError(err.message || 'Ошибка подключения');

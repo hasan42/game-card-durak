@@ -1,4 +1,3 @@
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { GameScreen } from './components/GameScreen'
@@ -7,11 +6,9 @@ import { isVKEnvironment, initVK } from './vk'
 // Создаём root ДО асинхронных операций
 const root = createRoot(document.getElementById('root')!)
 
-// Рендерим сразу
+// Рендерим без StrictMode для продакшена (убирает двойной рендер)
 root.render(
-  <StrictMode>
-    <GameScreen />
-  </StrictMode>,
+  <GameScreen />
 )
 
 // VK инициализация — асинхронно, после рендера
