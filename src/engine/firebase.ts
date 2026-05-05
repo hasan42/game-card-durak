@@ -29,8 +29,19 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
 };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+let app: ReturnType<typeof initializeApp> | null = null;
+let db: ReturnType<typeof getFirestore> | null = null;
+
+export function getDb() {
+  if (!db) {
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+      throw new Error('Firebase не настроен. Заполните .env файл с VITE_FIREBASE_* переменными.');
+    }
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+  }
+  return db;
+}
 
 // ─── Типы ───
 
@@ -61,15 +72,15 @@ const ROOMS_COLLECTION = 'durak_rooms';
 const PLAYERS_COLLECTION = 'durak_players';
 
 export function getRoomRef(roomId: string): DocumentReference<DocumentData, DocumentData> {
-  return doc(db, ROOMS_COLLECTION, roomId);
+  return doc(getDb(), ROOMS_COLLECTION, roomId);
 }
 
 export function getPlayersRef(roomId: string) {
-  return collection(db, ROOMS_COLLECTION, roomId, PLAYERS_COLLECTION);
+  return collection(getDb(), ROOMS_COLLECTION, roomId, PLAYERS_COLLECTION);
 }
 
 export function getPlayerRef(roomId: string, playerId: string): DocumentReference<DocumentData, DocumentData> {
-  return doc(db, ROOMS_COLLECTION, roomId, PLAYERS_COLLECTION, playerId);
+  return doc(getDb(), ROOMS_COLLECTION, roomId, PLAYERS_COLLECTION, playerId);
 }
 
 /** Создать комнату */

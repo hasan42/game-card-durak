@@ -165,10 +165,10 @@ export class FirebaseNetworkManager {
 
   /** Отправить action (для гостей) */
   private async sendAction(data: any): Promise<void> {
-    const { db } = await import('./firebase');
+    const { getDb } = await import('./firebase');
     const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
 
-    const actionRef = doc(db, 'durak_rooms', this._roomId, 'actions', `${Date.now()}_${this.myId}`);
+    const actionRef = doc(getDb(), 'durak_rooms', this._roomId, 'actions', `${Date.now()}_${this.myId}`);
     await setDoc(actionRef, {
       ...data,
       playerId: this.myId,
@@ -223,10 +223,10 @@ export class FirebaseNetworkManager {
   // ─── Actions (host polls) ───
 
   private async pollActions(): Promise<void> {
-    const { db } = await import('./firebase');
+    const { getDb } = await import('./firebase');
     const { collection, getDocs, query, orderBy, deleteDoc, doc } = await import('firebase/firestore');
 
-    const actionsRef = collection(db, 'durak_rooms', this._roomId, 'actions');
+    const actionsRef = collection(getDb(), 'durak_rooms', this._roomId, 'actions');
     const q = query(actionsRef, orderBy('timestamp'));
     const snap = await getDocs(q);
 
@@ -235,7 +235,7 @@ export class FirebaseNetworkManager {
       // Отправляем action как data-событие
       this.emit({ type: 'data', payload: { type: 'action', action } });
       // Удаляем обработанный action
-      deleteDoc(doc(db, 'durak_rooms', this._roomId, 'actions', docSnap.id)).catch(console.error);
+      deleteDoc(doc(getDb(), 'durak_rooms', this._roomId, 'actions', docSnap.id)).catch(console.error);
     });
   }
 

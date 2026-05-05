@@ -17,7 +17,7 @@ interface NetworkScreenProps {
 }
 
 export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
-  const [mode, setMode] = useState<'choose' | 'backend' | 'host' | 'join'>('choose');
+  const [mode, setMode] = useState<'choose' | 'host_or_join' | 'backend' | 'host' | 'join'>('choose');
   const [provider, setProvider] = useState<NetworkProvider>('firebase');
   const [roomId, setRoomId] = useState('');
   const [status, setStatus] = useState('');
@@ -192,7 +192,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     setError('');
   };
 
-  // ====== Выбор бэкенда ======
+  // ====== Начальный экран ======
   if (mode === 'choose') {
     return (
       <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-8">
@@ -202,7 +202,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
           Играйте с друзьями через интернет или локальную сеть.
         </p>
         <div className="flex flex-col gap-3 mt-4">
-          <button onClick={() => setMode('backend')} className="btn btn-primary text-xl px-8 py-3">
+          <button onClick={() => setMode('host_or_join')} className="btn btn-primary text-xl px-8 py-3">
             🎮 Играть онлайн
           </button>
           <button onClick={onBack} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2">
@@ -213,7 +213,28 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     );
   }
 
-  // ====== Выбор бэкенда ======
+  // ====== Экран выбора: создать или подключиться ======
+  if (mode === 'host_or_join') {
+    return (
+      <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
+        <div className="text-6xl">🎮</div>
+        <h2 className="text-3xl font-bold text-yellow-300">Сетевая игра</h2>
+        <div className="flex flex-col gap-4 w-full max-w-sm">
+          <button onClick={() => setMode('backend')} className="btn btn-primary text-xl px-8 py-4">
+            🏠 Создать комнату
+          </button>
+          <button onClick={() => setMode('join')} className="btn bg-green-700 hover:bg-green-600 text-white text-xl px-8 py-4">
+            🔗 Подключиться по коду
+          </button>
+          <button onClick={() => setMode('choose')} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2">
+            ← Назад
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ====== Выбор бэкенда (только для создания) ======
   if (mode === 'backend') {
     return (
       <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
@@ -247,7 +268,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
             </div>
           </button>
 
-          <button onClick={() => setMode('choose')} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 mt-2">
+          <button onClick={() => setMode('host_or_join')} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 mt-2">
             ← Назад
           </button>
         </div>
@@ -255,7 +276,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     );
   }
 
-  // ====== Создание комнаты ======
+  // ====== Создание комнаты (хост) ======
   if (mode === 'host') {
     return (
       <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
@@ -306,13 +327,28 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     );
   }
 
-  // ====== Подключение к комнате ======
+  // ====== Подключение к комнате (гость) ======
   return (
     <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
       <div className="text-6xl">🔗</div>
-      <h2 className="text-3xl font-bold text-yellow-300">
-        {provider === 'firebase' ? 'Подключение (Firebase)' : provider === 'vk' ? 'Подключение (VK)' : 'Подключение (PeerJS)'}
-      </h2>
+      <h2 className="text-3xl font-bold text-yellow-300">Подключение</h2>
+      
+      {/* Выбор бэкенда для подключения */}
+      <div className="flex gap-2 mb-2">
+        <button 
+          onClick={() => setProvider('firebase')}
+          className={`px-3 py-1 rounded text-sm ${provider === 'firebase' ? 'bg-yellow-500 text-black' : 'bg-frost-800 text-green-200'}`}
+        >
+          ☁️ Firebase
+        </button>
+        <button 
+          onClick={() => setProvider('peerjs')}
+          className={`px-3 py-1 rounded text-sm ${provider === 'peerjs' ? 'bg-yellow-500 text-black' : 'bg-frost-800 text-green-200'}`}
+        >
+          🏠 PeerJS
+        </button>
+      </div>
+      
       <div className="bg-black/40 rounded-xl p-6 text-center">
         <p className="text-green-300 text-sm mb-3">Введите код комнаты:</p>
         <input
@@ -329,7 +365,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
       </button>
       {status && <p className="text-green-200 text-sm">{status}</p>}
       {error && <p className="text-red-400 text-sm">{error}</p>}
-      <button onClick={() => { setMode('choose'); setStatus(''); setError(''); }} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2">
+      <button onClick={() => { setMode('host_or_join'); setStatus(''); setError(''); }} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2">
         ← Назад
       </button>
     </div>
