@@ -5427,9 +5427,32 @@ function executeAction(action) {
 			break;
 	}
 }
+/** Извлечь сериализуемое GameState из Zustand store (без функций) */
+function serializeGameState(store) {
+	return {
+		deck: store.deck,
+		trumpSuit: store.trumpSuit,
+		trumpCard: store.trumpCard,
+		players: store.players,
+		attackerIndex: store.attackerIndex,
+		defenderIndex: store.defenderIndex,
+		activePlayerIndex: store.activePlayerIndex,
+		playerCount: store.playerCount,
+		table: store.table,
+		phase: store.phase,
+		discardPile: store.discardPile,
+		consecutivePasses: store.consecutivePasses,
+		thrownInPasses: store.thrownInPasses,
+		winner: store.winner,
+		lastAction: store.lastAction,
+		gameMode: store.gameMode,
+		roundCount: store.roundCount
+	};
+}
 /** Рассылка состояния гостям. Карты других игроков скрываются. */
 function broadcastState(network, state) {
-	const s = state ?? useGameStore.getState();
+	const raw = state ?? useGameStore.getState();
+	const s = "validDefends" in raw ? serializeGameState(raw) : raw;
 	console.log("[broadcastState] phase:", s.phase, "isFirebase:", network instanceof FirebaseNetworkManager);
 	if (network instanceof FirebaseNetworkManager) network.send({
 		type: "full_state",
