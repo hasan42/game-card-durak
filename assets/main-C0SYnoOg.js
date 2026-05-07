@@ -5121,10 +5121,7 @@ var FirebaseNetworkManager = class {
 			return false;
 		}
 		if (this._isHost && data.type === "full_state") {
-			console.log("[FirebaseNet] Host sending gameState to Firestore, phase:", data.state?.phase);
-			updateGameState(this._roomId, data.state).then(() => {
-				console.log("[FirebaseNet] GameState updated in Firestore");
-			}).catch((e) => {
+			updateGameState(this._roomId, data.state).catch((e) => {
 				console.error("[FirebaseNet] Failed to update gameState:", e);
 			});
 			return true;
@@ -5162,17 +5159,14 @@ var FirebaseNetworkManager = class {
 				this.emit({ type: "disconnected" });
 				return;
 			}
-			if (!this._isHost && room.gameState) {
-				console.log("[FirebaseNet] Guest got room update, has gameState, phase:", room.gameState.phase);
-				this.emit({
-					type: "data",
-					payload: {
-						type: "full_state",
-						state: room.gameState,
-						myPlayerIndex: this.myPlayerIndex
-					}
-				});
-			} else if (!this._isHost) console.log("[FirebaseNet] Guest got room update, no gameState yet");
+			if (!this._isHost && room.gameState) this.emit({
+				type: "data",
+				payload: {
+					type: "full_state",
+					state: room.gameState,
+					myPlayerIndex: this.myPlayerIndex
+				}
+			});
 			if (room.status === "playing" && !this._connected) this._connected = true;
 		});
 		this.unsubscribePlayers = subscribePlayers(this._roomId, (players) => {
@@ -5213,7 +5207,6 @@ var FirebaseNetworkManager = class {
 					snap.docChanges().forEach((change) => {
 						if (change.type === "added") {
 							const action = change.doc.data();
-							console.log("[FirebaseNet] Host received action:", action.type, action.action?.type);
 							this.emit({
 								type: "data",
 								payload: {
@@ -5379,14 +5372,10 @@ var useNetStore = create((set, get) => ({
 		});
 		network.onData((data) => {
 			const msg = data;
-			console.log("[netStore] Guest received data:", msg.type, msg.state ? "has state" : "no state", "myIndex:", msg.myPlayerIndex);
-			if (msg.type === "full_state" && msg.state) {
-				console.log("[netStore] Setting gameState, phase:", msg.state.phase);
-				set({
-					gameState: msg.state,
-					myPlayerIndex: msg.myPlayerIndex ?? guestPlayerIndex
-				});
-			}
+			if (msg.type === "full_state" && msg.state) set({
+				gameState: msg.state,
+				myPlayerIndex: msg.myPlayerIndex ?? guestPlayerIndex
+			});
 		});
 		network.on((event) => {
 			if (event.type === "disconnected") set({ connected: false });
@@ -5427,7 +5416,6 @@ var useNetStore = create((set, get) => ({
 }));
 /** Хост выполняет действие гостя через gameStore */
 function executeAction(action) {
-	console.log("[netStore] Host executing action:", action.type, "from player", action.playerIndex);
 	const store = useGameStore.getState();
 	switch (action.type) {
 		case "attack": {
@@ -5479,7 +5467,6 @@ function serializeGameState(store) {
 function broadcastState(network, state) {
 	const raw = state ?? useGameStore.getState();
 	const s = "validDefends" in raw ? serializeGameState(raw) : raw;
-	console.log("[broadcastState] phase:", s.phase, "isFirebase:", network instanceof FirebaseNetworkManager);
 	if (network instanceof FirebaseNetworkManager) network.send({
 		type: "full_state",
 		state: s
