@@ -5338,7 +5338,10 @@ var useNetStore = create((set, get) => ({
 		const myPlayerIndex = 0;
 		network.onData((data) => {
 			const msg = data;
-			if (msg.type === "action" && msg.action) executeAction(msg.action);
+			if (msg.type === "action" && msg.action) executeAction({
+				...msg.action,
+				playerIndex: msg.playerIndex
+			});
 		});
 		network.on((event) => {
 			if (event.type === "disconnected") set({ connected: false });
@@ -5421,18 +5424,21 @@ var useNetStore = create((set, get) => ({
 }));
 /** Хост выполняет действие гостя через gameStore */
 function executeAction(action) {
-	console.log("[netStore] Host received action:", action.type);
+	console.log("[netStore] Host executing action:", action.type, "from player", action.playerIndex);
 	const store = useGameStore.getState();
 	switch (action.type) {
 		case "attack": {
-			const activeIndex = store.activePlayerIndex ?? 0;
-			const card = store.players[activeIndex]?.hand.find((c) => c.id === action.cardId);
-			if (card) store.attack(card);
+			const playerIdx = action.playerIndex ?? store.activePlayerIndex ?? 0;
+			const card = store.players[playerIdx]?.hand.find((c) => c.id === action.cardId);
+			if (card) {
+				if (store.activePlayerIndex !== playerIdx) useGameStore.setState({ activePlayerIndex: playerIdx });
+				store.attack(card);
+			}
 			break;
 		}
 		case "defend": {
-			const defenderIndex = store.defenderIndex ?? 1;
-			const defendCard = store.players[defenderIndex]?.hand.find((c) => c.id === action.defendCardId);
+			const defenderIdx = action.playerIndex ?? store.defenderIndex ?? 1;
+			const defendCard = store.players[defenderIdx]?.hand.find((c) => c.id === action.defendCardId);
 			if (defendCard) store.defend(action.attackCardId, defendCard);
 			break;
 		}
@@ -6608,28 +6614,42 @@ function GameScreen() {
 	const amIActive = myIndex === activeIdx;
 	const myRole = amIAttacker ? "⚔️ Атака" : amIDefender ? "🛡️ Защита" : amIThrower ? "🔄 Подкидывает" : "⏳ Ожидание";
 	const doAttack = (card) => {
-		if (isNetworkMode && netStore.role === "guest") netStore.sendAction({
-			type: "attack",
-			cardId: card.id
-		});
+		if (isNetworkMode && netStore.role === "guest") {
+			netStore.sendAction({
+				type: "attack",
+				cardId: card.id
+			});
+			setSelectedCard(null);
+			return;
+		}
 		store.attack(card);
 		setSelectedCard(null);
 	};
 	const doDefend = (attackCardId, defendCard) => {
-		if (isNetworkMode && netStore.role === "guest") netStore.sendAction({
-			type: "defend",
-			attackCardId,
-			defendCardId: defendCard.id
-		});
+		if (isNetworkMode && netStore.role === "guest") {
+			netStore.sendAction({
+				type: "defend",
+				attackCardId,
+				defendCardId: defendCard.id
+			});
+			setSelectedCard(null);
+			return;
+		}
 		store.defend(attackCardId, defendCard);
 		setSelectedCard(null);
 	};
 	const doTake = () => {
-		if (isNetworkMode && netStore.role === "guest") netStore.sendAction({ type: "take" });
+		if (isNetworkMode && netStore.role === "guest") {
+			netStore.sendAction({ type: "take" });
+			return;
+		}
 		store.take();
 	};
 	const doPass = () => {
-		if (isNetworkMode && netStore.role === "guest") netStore.sendAction({ type: "pass" });
+		if (isNetworkMode && netStore.role === "guest") {
+			netStore.sendAction({ type: "pass" });
+			return;
+		}
 		store.pass();
 	};
 	const otherPlayers = players.map((p, i) => ({
