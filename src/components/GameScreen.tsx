@@ -21,6 +21,7 @@ export function GameScreen() {
   const netStore = useNetStore();
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [showNetwork, setShowNetwork] = useState(false);
+  const [playerCount, setPlayerCount] = useState(2);
 
   // Анимации
   const prevTableRef = useRef<Set<string>>(new Set());
@@ -83,8 +84,6 @@ export function GameScreen() {
 
   // Методы всегда из store
   const { aiThinking } = store;
-
-  const [playerCount, setPlayerCount] = useState(2);
   const isVK = isVKEnvironment();
   
 
