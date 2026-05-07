@@ -644,7 +644,7 @@ var useGameStore = create((set, get) => ({
 			});
 			return;
 		}
-		const newDefenderIndex = getNextPlayerIndex(defenderIndex, playerCount, defenderIndex);
+		const newDefenderIndex = playerCount === 2 ? defenderIndex : getNextPlayerIndex(defenderIndex, playerCount, defenderIndex);
 		set({
 			players: newPlayers,
 			deck: currentDeck,
