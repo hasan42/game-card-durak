@@ -174,7 +174,7 @@ function executeAction(action: any) {
 }
 
 /** Извлечь сериализуемое GameState из Zustand store (без функций) */
-function serializeGameState(store: any): GameState {
+export function serializeGameState(store: any): GameState {
   return {
     deck: store.deck,
     trumpSuit: store.trumpSuit,

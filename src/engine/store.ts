@@ -429,7 +429,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     // Защитник взял → тот же атакующий продолжает, защитник пропускает
-    const newDefenderIndex = getNextPlayerIndex(defenderIndex, playerCount, defenderIndex);
+    // При 2 игроках — защитник не может пропустить, остаётся тем же
+    const newDefenderIndex = playerCount === 2
+      ? defenderIndex
+      : getNextPlayerIndex(defenderIndex, playerCount, defenderIndex);
     const nextPhase = gameMode === 'hotseat' ? 'handoff' : 'attacking';
 
     set({
