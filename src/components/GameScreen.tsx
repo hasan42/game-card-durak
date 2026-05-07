@@ -270,10 +270,12 @@ export function GameScreen() {
   // Роль для отображения
   const myRole = amIAttacker ? '⚔️ Атака' : amIDefender ? '🛡️ Защита' : amIThrower ? '🔄 Подкидывает' : '⏳ Ожидание';
 
-  // Действия
+  // Действия — в сетевом режиме гость только отправляет action хосту
   const doAttack = (card: Card) => {
     if (isNetworkMode && netStore.role === 'guest') {
       netStore.sendAction({ type: 'attack', cardId: card.id });
+      setSelectedCard(null);
+      return;
     }
     store.attack(card);
     setSelectedCard(null);
@@ -282,6 +284,8 @@ export function GameScreen() {
   const doDefend = (attackCardId: string, defendCard: Card) => {
     if (isNetworkMode && netStore.role === 'guest') {
       netStore.sendAction({ type: 'defend', attackCardId, defendCardId: defendCard.id });
+      setSelectedCard(null);
+      return;
     }
     store.defend(attackCardId, defendCard);
     setSelectedCard(null);
@@ -290,6 +294,7 @@ export function GameScreen() {
   const doTake = () => {
     if (isNetworkMode && netStore.role === 'guest') {
       netStore.sendAction({ type: 'take' });
+      return;
     }
     store.take();
   };
@@ -297,6 +302,7 @@ export function GameScreen() {
   const doPass = () => {
     if (isNetworkMode && netStore.role === 'guest') {
       netStore.sendAction({ type: 'pass' });
+      return;
     }
     store.pass();
   };

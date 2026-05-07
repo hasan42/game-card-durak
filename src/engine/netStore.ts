@@ -48,9 +48,11 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
     // Хост получает actions от гостей
     network.onData((data) => {
-      const msg = data as { type: string; action?: NetworkAction };
+      const msg = data as { type: string; action?: NetworkAction; playerIndex?: number };
       if (msg.type === 'action' && msg.action) {
-        executeAction(msg.action);
+        // Добавляем playerIndex из сообщения в action
+        const actionWithPlayer = { ...msg.action, playerIndex: msg.playerIndex };
+        executeAction(actionWithPlayer);
       }
     });
 
@@ -133,20 +135,28 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
 /** Хост выполняет действие гостя через gameStore */
 function executeAction(action: NetworkAction) {
-  console.log('[netStore] Host received action:', action.type);
+  console.log('[netStore] Host executing action:', action.type, 'from player', action.playerIndex);
   const store = useGameStore.getState();
 
   switch (action.type) {
     case 'attack': {
-      // Найти карту у активного игрока
-      const activeIndex = store.activePlayerIndex ?? 0;
-      const card = store.players[activeIndex]?.hand.find(c => c.id === action.cardId);
-      if (card) store.attack(card);
+      // Ищем карту у игрока, отправившего action (не у activePlayerIndex)
+      const playerIdx = action.playerIndex ?? store.activePlayerIndex ?? 0;
+      const card = store.players[playerIdx]?.hand.find(c => c.id === action.cardId);
+      if (card) {
+        // Устанавливаем activePlayerIndex на отправителя, если нужно
+        if (store.activePlayerIndex !== playerIdx) {
+          // Ход от подкидывающего — attack() использует activePlayerIndex
+          // Нужно временно переключить
+          useGameStore.setState({ activePlayerIndex: playerIdx });
+        }
+        store.attack(card);
+      }
       break;
     }
     case 'defend': {
-      const defenderIndex = store.defenderIndex ?? 1;
-      const defendCard = store.players[defenderIndex]?.hand.find(c => c.id === action.defendCardId);
+      const defenderIdx = action.playerIndex ?? store.defenderIndex ?? 1;
+      const defendCard = store.players[defenderIdx]?.hand.find(c => c.id === action.defendCardId);
       if (defendCard) store.defend(action.attackCardId, defendCard);
       break;
     }
