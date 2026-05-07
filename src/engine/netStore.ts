@@ -94,9 +94,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
     // Гость слушает full_state от хоста
     network.onData((data) => {
       const msg = data as { type: string; state?: GameState; myPlayerIndex?: number };
-      console.log('[netStore] Guest received data:', msg.type, msg.state ? 'has state' : 'no state', 'myIndex:', msg.myPlayerIndex);
       if (msg.type === 'full_state' && msg.state) {
-        console.log('[netStore] Setting gameState, phase:', msg.state.phase);
         set({ gameState: msg.state, myPlayerIndex: msg.myPlayerIndex ?? guestPlayerIndex });
       }
     });
@@ -137,7 +135,6 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
 /** Хост выполняет действие гостя через gameStore */
 function executeAction(action: any) {
-  console.log('[netStore] Host executing action:', action.type, 'from player', action.playerIndex);
   const store = useGameStore.getState();
 
   switch (action.type) {
@@ -201,7 +198,6 @@ function broadcastState(network: NetworkManager | FirebaseNetworkManager, state?
   const raw = state ?? useGameStore.getState();
   // Убираем функции из Zustand store — Firestore не сериализует функции
   const s: GameState = ('validDefends' in raw) ? serializeGameState(raw) : raw;
-  console.log('[broadcastState] phase:', s.phase, 'isFirebase:', network instanceof FirebaseNetworkManager);
 
   // Формируем state для каждого игрока (скрываем чужие карты)
   // Для PeerJS: 1 гость, для Firebase: N гостей

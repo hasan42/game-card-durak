@@ -153,10 +153,7 @@ export class FirebaseNetworkManager {
 
     // Хост обновляет gameState в Firestore
     if (this._isHost && data.type === 'full_state') {
-      console.log('[FirebaseNet] Host sending gameState to Firestore, phase:', data.state?.phase);
-      updateGameState(this._roomId, data.state).then(() => {
-        console.log('[FirebaseNet] GameState updated in Firestore');
-      }).catch((e) => {
+      updateGameState(this._roomId, data.state).catch((e) => {
         console.error('[FirebaseNet] Failed to update gameState:', e);
       });
       return true;
@@ -198,10 +195,7 @@ export class FirebaseNetworkManager {
 
       // Гость получает gameState
       if (!this._isHost && room.gameState) {
-        console.log('[FirebaseNet] Guest got room update, has gameState, phase:', room.gameState.phase);
         this.emit({ type: 'data', payload: { type: 'full_state', state: room.gameState, myPlayerIndex: this.myPlayerIndex } });
-      } else if (!this._isHost) {
-        console.log('[FirebaseNet] Guest got room update, no gameState yet');
       }
 
       // Статус changed
@@ -248,7 +242,6 @@ export class FirebaseNetworkManager {
           snap.docChanges().forEach((change) => {
             if (change.type === 'added') {
               const action = change.doc.data();
-              console.log('[FirebaseNet] Host received action:', action.type, action.action?.type);
               this.emit({ type: 'data', payload: { type: 'action', action } });
               // Удаляем обработанный action
               deleteDoc(doc(getDb(), 'durak_rooms', this._roomId, 'actions', change.doc.id)).catch(console.error);
