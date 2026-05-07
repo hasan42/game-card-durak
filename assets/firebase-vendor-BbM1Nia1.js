@@ -14026,21 +14026,6 @@ function __PRIVATE_firestoreClientGetDocumentViaSnapshotListener(e, t, n = {}) {
 		return __PRIVATE_eventManagerListen(e, o);
 	}(await __PRIVATE_getEventManager(e), e.asyncQueue, t, n, r))), r.promise;
 }
-function __PRIVATE_firestoreClientGetDocumentsViaSnapshotListener(e, t, n = {}) {
-	const r = new __PRIVATE_Deferred();
-	return e.asyncQueue.enqueueAndForget((async () => function __PRIVATE_executeQueryViaSnapshotListener(e, t, n, r, i) {
-		const s = new __PRIVATE_AsyncObserver({
-			next: (n) => {
-				s.Nu(), t.enqueueAndForget((() => __PRIVATE_eventManagerUnlisten(e, o))), n.fromCache && "server" === r.source ? i.reject(new FirestoreError(D.UNAVAILABLE, "Failed to get documents from server. (However, these documents may exist in the local cache. Run again without setting source to \"server\" to retrieve the cached documents.)")) : i.resolve(n);
-			},
-			error: (e) => i.reject(e)
-		}), o = new __PRIVATE_QueryListener(n, s, {
-			includeMetadataChanges: !0,
-			qa: !0
-		});
-		return __PRIVATE_eventManagerListen(e, o);
-	}(await __PRIVATE_getEventManager(e), e.asyncQueue, t, n, r))), r.promise;
-}
 function __PRIVATE_firestoreClientWrite(e, t) {
 	const n = new __PRIVATE_Deferred();
 	return e.asyncQueue.enqueueAndForget((async () => __PRIVATE_syncEngineWrite(await __PRIVATE_getSyncEngine(e), t, n))), n.promise;
@@ -15938,20 +15923,6 @@ function __PRIVATE_resultChangeType(t) {
 	const e = __PRIVATE_cast(t.firestore, Firestore);
 	return __PRIVATE_firestoreClientGetDocumentViaSnapshotListener(ensureFirestoreConfigured(e), t._key).then(((n) => __PRIVATE_convertToDocSnapshot(e, t, n)));
 }
-/**
-* Executes the query and returns the results as a `QuerySnapshot`.
-*
-* Note: `getDocs()` attempts to provide up-to-date data when possible by
-* waiting for data from the server, but it may return cached data or fail if
-* you are offline and the server cannot be reached. To specify this behavior,
-* invoke {@link getDocsFromCache} or {@link getDocsFromServer}.
-*
-* @returns A `Promise` that resolves with the results of the query.
-*/ function getDocs(t) {
-	t = __PRIVATE_cast(t, Query);
-	const e = __PRIVATE_cast(t.firestore, Firestore), n = ensureFirestoreConfigured(e), r = new __PRIVATE_ExpUserDataWriter(e);
-	return __PRIVATE_validateHasExplicitOrderByForLimitToLast(t._query), __PRIVATE_firestoreClientGetDocumentsViaSnapshotListener(n, t._query).then(((n) => new QuerySnapshot(e, r, t, n)));
-}
 function setDoc(t, e, n) {
 	t = __PRIVATE_cast(t, DocumentReference);
 	const r = __PRIVATE_cast(t.firestore, Firestore), s = __PRIVATE_applyFirestoreDataConverter(t.converter, e, n);
@@ -16069,7 +16040,6 @@ var index_esm_exports = /* @__PURE__ */ __exportAll({
 	doc: () => doc,
 	executeWrite: () => executeWrite,
 	getDoc: () => getDoc,
-	getDocs: () => getDocs,
 	onSnapshot: () => onSnapshot,
 	orderBy: () => orderBy,
 	query: () => query,

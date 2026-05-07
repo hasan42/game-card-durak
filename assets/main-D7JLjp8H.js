@@ -1,7 +1,7 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/firebase-CiCqFX-G.js","assets/rolldown-runtime-BZ_oHznj.js","assets/firebase-vendor-DlK28w6c.js"])))=>i.map(i=>d[i]);
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/firebase-3vXzaqtW.js","assets/rolldown-runtime-BZ_oHznj.js","assets/firebase-vendor-BbM1Nia1.js"])))=>i.map(i=>d[i]);
 import { n as __exportAll, r as __toESM, t as __commonJSMin } from "./rolldown-runtime-BZ_oHznj.js";
 import { n as require_client, r as require_react, t as require_jsx_runtime } from "./react-vendor-_7n9mxq1.js";
-import { a as roomExists, c as updateGameState, i as leaveRoom, o as subscribePlayers, r as joinRoom, s as subscribeRoom, t as createRoom } from "./firebase-CiCqFX-G.js";
+import { a as roomExists, c as updateGameState, i as leaveRoom, o as subscribePlayers, r as joinRoom, s as subscribeRoom, t as createRoom } from "./firebase-3vXzaqtW.js";
 //#region \0vite/modulepreload-polyfill.js
 (function polyfill() {
 	const relList = document.createElement("link").relList;
@@ -5088,7 +5088,8 @@ var FirebaseNetworkManager = class {
 	async join(roomId, playerName = "Игрок") {
 		const playerId = this.generatePlayerId();
 		if (!await roomExists(roomId)) throw new Error("Комната не найдена");
-		const playerIndex = (await this.getRoomWithPlayers(roomId))?.playerCount ?? 0;
+		const room = await this.getRoomWithPlayers(roomId);
+		const playerIndex = room ? room.playerCount : 0;
 		if (!await joinRoom(roomId, playerId, `${playerName} ${playerIndex + 1}`, playerIndex)) throw new Error("Не удалось присоединиться к комнате (возможно, она заполнена или игра уже началась)");
 		this._roomId = roomId;
 		this.myId = playerId;
@@ -5137,11 +5138,11 @@ var FirebaseNetworkManager = class {
 	/** Отправить action (для гостей) */
 	async sendAction(data) {
 		const { getDb } = await __vitePreload(async () => {
-			const { getDb } = await import("./firebase-CiCqFX-G.js").then((n) => n.n);
+			const { getDb } = await import("./firebase-3vXzaqtW.js").then((n) => n.n);
 			return { getDb };
 		}, __vite__mapDeps([0,1,2]));
 		const { doc, setDoc, serverTimestamp } = await __vitePreload(async () => {
-			const { doc, setDoc, serverTimestamp } = await import("./firebase-vendor-DlK28w6c.js").then((n) => n.t);
+			const { doc, setDoc, serverTimestamp } = await import("./firebase-vendor-BbM1Nia1.js").then((n) => n.t);
 			return {
 				doc,
 				setDoc,
@@ -5176,8 +5177,8 @@ var FirebaseNetworkManager = class {
 		});
 		this.unsubscribePlayers = subscribePlayers(this._roomId, (players) => {
 			this._players = players;
-			if (this._isHost) this.pollActions().catch(console.error);
 		});
+		if (this._isHost) this.startActionListener();
 	}
 	stopSubscriptions() {
 		if (this.unsubscribeRoom) {
@@ -5188,44 +5189,60 @@ var FirebaseNetworkManager = class {
 			this.unsubscribePlayers();
 			this.unsubscribePlayers = null;
 		}
+		this.stopActionListener();
 	}
-	async pollActions() {
-		const { getDb } = await __vitePreload(async () => {
-			const { getDb } = await import("./firebase-CiCqFX-G.js").then((n) => n.n);
+	unsubscribeActions = null;
+	startActionListener() {
+		__vitePreload(async () => {
+			const { getDb } = await import("./firebase-3vXzaqtW.js").then((n) => n.n);
 			return { getDb };
-		}, __vite__mapDeps([0,1,2]));
-		const { collection, getDocs, query, orderBy, deleteDoc, doc } = await __vitePreload(async () => {
-			const { collection, getDocs, query, orderBy, deleteDoc, doc } = await import("./firebase-vendor-DlK28w6c.js").then((n) => n.t);
-			return {
-				collection,
-				getDocs,
-				query,
-				orderBy,
-				deleteDoc,
-				doc
-			};
-		}, __vite__mapDeps([2,1]));
-		(await getDocs(query(collection(getDb(), "durak_rooms", this._roomId, "actions"), orderBy("timestamp")))).forEach((docSnap) => {
-			const action = docSnap.data();
-			this.emit({
-				type: "data",
-				payload: {
-					type: "action",
-					action
-				}
+		}, __vite__mapDeps([0,1,2])).then(({ getDb }) => {
+			__vitePreload(async () => {
+				const { collection, onSnapshot, deleteDoc, doc, query, orderBy } = await import("./firebase-vendor-BbM1Nia1.js").then((n) => n.t);
+				return {
+					collection,
+					onSnapshot,
+					deleteDoc,
+					doc,
+					query,
+					orderBy
+				};
+			}, __vite__mapDeps([2,1])).then(({ collection, onSnapshot, deleteDoc, doc, query, orderBy }) => {
+				const q = query(collection(getDb(), "durak_rooms", this._roomId, "actions"), orderBy("timestamp"));
+				this.unsubscribeActions = onSnapshot(q, (snap) => {
+					snap.docChanges().forEach((change) => {
+						if (change.type === "added") {
+							const action = change.doc.data();
+							console.log("[FirebaseNet] Host received action:", action.type, action.action?.type);
+							this.emit({
+								type: "data",
+								payload: {
+									type: "action",
+									action
+								}
+							});
+							deleteDoc(doc(getDb(), "durak_rooms", this._roomId, "actions", change.doc.id)).catch(console.error);
+						}
+					});
+				});
 			});
-			deleteDoc(doc(getDb(), "durak_rooms", this._roomId, "actions", docSnap.id)).catch(console.error);
 		});
+	}
+	stopActionListener() {
+		if (this.unsubscribeActions) {
+			this.unsubscribeActions();
+			this.unsubscribeActions = null;
+		}
 	}
 	startHeartbeat() {
 		this.heartbeatInterval = setInterval(() => {
 			if (!this._roomId || !this.myId) return;
 			__vitePreload(async () => {
-				const { getPlayerRef } = await import("./firebase-CiCqFX-G.js").then((n) => n.n);
+				const { getPlayerRef } = await import("./firebase-3vXzaqtW.js").then((n) => n.n);
 				return { getPlayerRef };
 			}, __vite__mapDeps([0,1,2])).then(({ getPlayerRef }) => {
 				__vitePreload(async () => {
-					const { updateDoc, serverTimestamp } = await import("./firebase-vendor-DlK28w6c.js").then((n) => n.t);
+					const { updateDoc, serverTimestamp } = await import("./firebase-vendor-BbM1Nia1.js").then((n) => n.t);
 					return {
 						updateDoc,
 						serverTimestamp
@@ -5247,11 +5264,11 @@ var FirebaseNetworkManager = class {
 	}
 	async registerAsPlayer(roomId, playerId, name, index) {
 		const { getPlayerRef } = await __vitePreload(async () => {
-			const { getPlayerRef } = await import("./firebase-CiCqFX-G.js").then((n) => n.n);
+			const { getPlayerRef } = await import("./firebase-3vXzaqtW.js").then((n) => n.n);
 			return { getPlayerRef };
 		}, __vite__mapDeps([0,1,2]));
 		const { setDoc, serverTimestamp } = await __vitePreload(async () => {
-			const { setDoc, serverTimestamp } = await import("./firebase-vendor-DlK28w6c.js").then((n) => n.t);
+			const { setDoc, serverTimestamp } = await import("./firebase-vendor-BbM1Nia1.js").then((n) => n.t);
 			return {
 				setDoc,
 				serverTimestamp
@@ -5268,7 +5285,7 @@ var FirebaseNetworkManager = class {
 	}
 	async getRoomWithPlayers(roomId) {
 		const { getRoom } = await __vitePreload(async () => {
-			const { getRoom } = await import("./firebase-CiCqFX-G.js").then((n) => n.n);
+			const { getRoom } = await import("./firebase-3vXzaqtW.js").then((n) => n.n);
 			return { getRoom };
 		}, __vite__mapDeps([0,1,2]));
 		return getRoom(roomId);

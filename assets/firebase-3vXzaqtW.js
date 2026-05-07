@@ -1,5 +1,5 @@
 import { n as __exportAll } from "./rolldown-runtime-BZ_oHznj.js";
-import { a as setDoc, c as doc, d as initializeApp, i as onSnapshot, l as getFirestore, n as deleteDoc, o as updateDoc, r as getDoc, s as collection, u as serverTimestamp } from "./firebase-vendor-DlK28w6c.js";
+import { a as setDoc, c as doc, d as initializeApp, i as onSnapshot, l as getFirestore, n as deleteDoc, o as updateDoc, r as getDoc, s as collection, u as serverTimestamp } from "./firebase-vendor-BbM1Nia1.js";
 //#region src/engine/firebase.ts
 /**
 * Firebase конфигурация для сетевой игры «Дурак»
