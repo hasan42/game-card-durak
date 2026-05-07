@@ -6274,6 +6274,7 @@ function GameScreen() {
 	const netStore = useNetStore();
 	const [selectedCard, setSelectedCard] = (0, import_react.useState)(null);
 	const [showNetwork, setShowNetwork] = (0, import_react.useState)(false);
+	const [playerCount, setPlayerCount] = (0, import_react.useState)(2);
 	const prevTableRef = (0, import_react.useRef)(/* @__PURE__ */ new Set());
 	const [newCardIds, setNewCardIds] = (0, import_react.useState)(/* @__PURE__ */ new Set());
 	const [clearing, setClearing] = (0, import_react.useState)(false);
@@ -6318,7 +6319,6 @@ function GameScreen() {
 	});
 	const { deck, trumpSuit, trumpCard, players, table, phase, lastAction, winner, gameMode } = gameState;
 	const { aiThinking } = store;
-	const [playerCount, setPlayerCount] = (0, import_react.useState)(2);
 	const isVK = isVKEnvironment();
 	if (showNetwork && !isNetworkMode) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(NetworkScreen, {
 		onConnected: (network, role, backend) => {
