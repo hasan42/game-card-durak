@@ -5338,10 +5338,13 @@ var useNetStore = create((set, get) => ({
 		const myPlayerIndex = 0;
 		network.onData((data) => {
 			const msg = data;
-			if (msg.type === "action" && msg.action) executeAction({
-				...msg.action,
-				playerIndex: msg.playerIndex
-			});
+			if (msg.type === "action" && msg.action) {
+				const playerIndex = msg.playerIndex ?? msg.action.playerIndex;
+				executeAction({
+					...msg.action.action ?? msg.action,
+					playerIndex
+				});
+			}
 		});
 		network.on((event) => {
 			if (event.type === "disconnected") set({ connected: false });
