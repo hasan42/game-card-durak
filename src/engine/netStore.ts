@@ -67,6 +67,10 @@ export const useNetStore = create<NetStore>((set, get) => ({
     const roomId = 'roomId' in network ? network.roomId : null;
     set({ network, backend, role: 'host', myPlayerIndex, connected: true, error: null, roomId });
     
+    // Немедленно рассылаем текущее состояние игры
+    // (подписка на изменения будет работать через setTimeout)
+    broadcastState(network);
+    
     // Подписка на gameStore отложенно, чтобы не вызывать внутри React render
     setTimeout(() => {
       unsubscribeGameStore = useGameStore.subscribe((state) => {
@@ -77,11 +81,19 @@ export const useNetStore = create<NetStore>((set, get) => ({
   },
 
   initGuest: (network, backend) => {
+    // Определяем myPlayerIndex до подписок
+    const guestPlayerIndex = 'playerIndex' in network ? (network as any).playerIndex : 1;
+
+    // Сначала устанавливаем стейт, потом подписываемся
+    set({ network, backend, role: 'guest', myPlayerIndex: guestPlayerIndex, connected: true, error: null, roomId: 'roomId' in network ? network.roomId : null });
+
     // Гость слушает full_state от хоста
     network.onData((data) => {
       const msg = data as { type: string; state?: GameState; myPlayerIndex?: number };
+      console.log('[netStore] Guest received data:', msg.type, msg.state ? 'has state' : 'no state', 'myIndex:', msg.myPlayerIndex);
       if (msg.type === 'full_state' && msg.state) {
-        set({ gameState: msg.state, myPlayerIndex: msg.myPlayerIndex ?? 1 });
+        console.log('[netStore] Setting gameState, phase:', msg.state.phase);
+        set({ gameState: msg.state, myPlayerIndex: msg.myPlayerIndex ?? guestPlayerIndex });
       }
     });
 
@@ -93,9 +105,6 @@ export const useNetStore = create<NetStore>((set, get) => ({
         set({ error: String(event.payload?.message || event.payload || 'Network error') });
       }
     });
-
-    const roomId = 'roomId' in network ? network.roomId : null;
-    set({ network, backend, role: 'guest', myPlayerIndex: 1, connected: true, error: null, roomId });
   },
 
   sendAction: (action) => {
@@ -124,6 +133,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
 /** Хост выполняет действие гостя через gameStore */
 function executeAction(action: NetworkAction) {
+  console.log('[netStore] Host received action:', action.type);
   const store = useGameStore.getState();
 
   switch (action.type) {
@@ -151,9 +161,35 @@ function executeAction(action: NetworkAction) {
   }
 }
 
+/** Извлечь сериализуемое GameState из Zustand store (без функций) */
+function serializeGameState(store: any): GameState {
+  return {
+    deck: store.deck,
+    trumpSuit: store.trumpSuit,
+    trumpCard: store.trumpCard,
+    players: store.players,
+    attackerIndex: store.attackerIndex,
+    defenderIndex: store.defenderIndex,
+    activePlayerIndex: store.activePlayerIndex,
+    playerCount: store.playerCount,
+    table: store.table,
+    phase: store.phase,
+    discardPile: store.discardPile,
+    consecutivePasses: store.consecutivePasses,
+    thrownInPasses: store.thrownInPasses,
+    winner: store.winner,
+    lastAction: store.lastAction,
+    gameMode: store.gameMode,
+    roundCount: store.roundCount,
+  };
+}
+
 /** Рассылка состояния гостям. Карты других игроков скрываются. */
 function broadcastState(network: NetworkManager | FirebaseNetworkManager, state?: GameState) {
-  const s = state ?? useGameStore.getState();
+  const raw = state ?? useGameStore.getState();
+  // Убираем функции из Zustand store — Firestore не сериализует функции
+  const s: GameState = ('validDefends' in raw) ? serializeGameState(raw) : raw;
+  console.log('[broadcastState] phase:', s.phase, 'isFirebase:', network instanceof FirebaseNetworkManager);
 
   // Формируем state для каждого игрока (скрываем чужие карты)
   // Для PeerJS: 1 гость, для Firebase: N гостей

@@ -99,9 +99,12 @@ export class FirebaseNetworkManager {
       throw new Error('Комната не найдена');
     }
 
-    // Определить индекс игрока
+    // Определить индекс игрока (0-based: хост=0, гость=1,2,...)
+    // playerCount в комнате ЕЩЁ не обновлён при joinRoom — он будет увеличен внутри joinRoom
+    // Поэтому текущий playerCount = кол-во игроков ДО нашего подключения
     const room = await this.getRoomWithPlayers(roomId);
-    const playerIndex = room?.playerCount ?? 0;
+    const playerIndex = room ? room.playerCount : 0; // 0-based: если 1 игрок уже есть, мы = индекс 1
+
 
     const success = await joinRoom(roomId, playerId, `${playerName} ${playerIndex + 1}`, playerIndex);
     if (!success) {
@@ -150,7 +153,12 @@ export class FirebaseNetworkManager {
 
     // Хост обновляет gameState в Firestore
     if (this._isHost && data.type === 'full_state') {
-      updateGameState(this._roomId, data.state).catch(console.error);
+      console.log('[FirebaseNet] Host sending gameState to Firestore, phase:', data.state?.phase);
+      updateGameState(this._roomId, data.state).then(() => {
+        console.log('[FirebaseNet] GameState updated in Firestore');
+      }).catch((e) => {
+        console.error('[FirebaseNet] Failed to update gameState:', e);
+      });
       return true;
     }
 
@@ -190,7 +198,10 @@ export class FirebaseNetworkManager {
 
       // Гость получает gameState
       if (!this._isHost && room.gameState) {
+        console.log('[FirebaseNet] Guest got room update, has gameState, phase:', room.gameState.phase);
         this.emit({ type: 'data', payload: { type: 'full_state', state: room.gameState, myPlayerIndex: this.myPlayerIndex } });
+      } else if (!this._isHost) {
+        console.log('[FirebaseNet] Guest got room update, no gameState yet');
       }
 
       // Статус changed
@@ -202,12 +213,12 @@ export class FirebaseNetworkManager {
     // Подписка на игроков
     this.unsubscribePlayers = subscribePlayers(this._roomId, (players) => {
       this._players = players;
-
-      // Если хост — проверяем actions от гостей
-      if (this._isHost) {
-        this.pollActions().catch(console.error);
-      }
     });
+
+    // Хост подписывается на actions от гостей в реальном времени
+    if (this._isHost) {
+      this.startActionListener();
+    }
   }
 
   private stopSubscriptions(): void {
@@ -219,25 +230,40 @@ export class FirebaseNetworkManager {
       this.unsubscribePlayers();
       this.unsubscribePlayers = null;
     }
+    this.stopActionListener();
   }
 
-  // ─── Actions (host polls) ───
+  // ─── Actions (host real-time listener) ───
 
-  private async pollActions(): Promise<void> {
-    const { getDb } = await import('./firebase');
-    const { collection, getDocs, query, orderBy, deleteDoc, doc } = await import('firebase/firestore');
+  private unsubscribeActions: (() => void) | null = null;
 
-    const actionsRef = collection(getDb(), 'durak_rooms', this._roomId, 'actions');
-    const q = query(actionsRef, orderBy('timestamp'));
-    const snap = await getDocs(q);
+  private startActionListener(): void {
+    // Динамический импорт — подписка на actions в реальном времени
+    import('./firebase').then(({ getDb }) => {
+      import('firebase/firestore').then(({ collection, onSnapshot, deleteDoc, doc, query, orderBy }) => {
+        const actionsRef = collection(getDb(), 'durak_rooms', this._roomId, 'actions');
+        const q = query(actionsRef, orderBy('timestamp'));
 
-    snap.forEach((docSnap) => {
-      const action = docSnap.data();
-      // Отправляем action как data-событие
-      this.emit({ type: 'data', payload: { type: 'action', action } });
-      // Удаляем обработанный action
-      deleteDoc(doc(getDb(), 'durak_rooms', this._roomId, 'actions', docSnap.id)).catch(console.error);
+        this.unsubscribeActions = onSnapshot(q, (snap) => {
+          snap.docChanges().forEach((change) => {
+            if (change.type === 'added') {
+              const action = change.doc.data();
+              console.log('[FirebaseNet] Host received action:', action.type, action.action?.type);
+              this.emit({ type: 'data', payload: { type: 'action', action } });
+              // Удаляем обработанный action
+              deleteDoc(doc(getDb(), 'durak_rooms', this._roomId, 'actions', change.doc.id)).catch(console.error);
+            }
+          });
+        });
+      });
     });
+  }
+
+  private stopActionListener(): void {
+    if (this.unsubscribeActions) {
+      this.unsubscribeActions();
+      this.unsubscribeActions = null;
+    }
   }
 
   // ─── Heartbeat ───
