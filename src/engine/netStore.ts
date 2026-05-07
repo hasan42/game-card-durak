@@ -48,10 +48,12 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
     // Хост получает actions от гостей
     network.onData((data) => {
-      const msg = data as { type: string; action?: NetworkAction; playerIndex?: number };
+      const msg = data as { type: string; action?: any; playerIndex?: number };
       if (msg.type === 'action' && msg.action) {
-        // Добавляем playerIndex из сообщения в action
-        const actionWithPlayer = { ...msg.action, playerIndex: msg.playerIndex };
+        // playerIndex может быть на уровне msg или msg.action (зависит от транспорта)
+        const playerIndex = msg.playerIndex ?? msg.action.playerIndex;
+        const innerAction = msg.action.action ?? msg.action; // Firebase оборачивает: { type: 'action', action: { type: 'defend', ... }, playerIndex }
+        const actionWithPlayer = { ...innerAction, playerIndex };
         executeAction(actionWithPlayer);
       }
     });
@@ -134,7 +136,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
 // ─── Helpers ───
 
 /** Хост выполняет действие гостя через gameStore */
-function executeAction(action: NetworkAction) {
+function executeAction(action: any) {
   console.log('[netStore] Host executing action:', action.type, 'from player', action.playerIndex);
   const store = useGameStore.getState();
 
