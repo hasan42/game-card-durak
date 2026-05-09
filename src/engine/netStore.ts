@@ -14,6 +14,7 @@ const RECONNECT_KEY = 'durak_reconnect';
 interface ReconnectData {
   roomId: string;
   playerIndex: number;
+  playerId?: string;
   backend: 'peerjs' | 'firebase';
 }
 
@@ -138,7 +139,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
     // Сохраняем для реконнекта
     if (roomId) {
-      saveReconnect({ roomId, playerIndex: guestPlayerIndex, backend });
+      saveReconnect({ roomId, playerIndex: guestPlayerIndex, playerId: 'myId' in network ? (network as any).myId : undefined, backend });
     }
   },
 

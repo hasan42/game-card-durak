@@ -39,7 +39,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
   const [error, setError] = useState('');
   const [generatedRoomId, setGeneratedRoomId] = useState('');
   const [playerCount, setPlayerCount] = useState(2);
-  const [reconnectData, setReconnectData] = useState<{ roomId: string; playerIndex: number; backend: NetworkBackend } | null>(null);
+  const [reconnectData, setReconnectData] = useState<{ roomId: string; playerIndex: number; playerId?: string; backend: NetworkBackend } | null>(null);
   const [lobbyPlayers, setLobbyPlayers] = useState<{ name: string; index: number; connected: boolean }[]>([]);
   const [lobbyMaxPlayers, setLobbyMaxPlayers] = useState(2);
   const networkRef = useRef<NetworkManagerInterface | null>(null);
@@ -228,7 +228,11 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
             }
           });
 
-          await network.join(reconnectData.roomId);
+          await network.join(reconnectData.roomId, {
+            playerName: `Player ${reconnectData.playerIndex + 1}`,
+            playerIndex: reconnectData.playerIndex,
+            playerId: reconnectData.playerId,
+          });
           setStatus('Подключено!');
           onConnected(network, 'guest', 'firebase');
         } else {
