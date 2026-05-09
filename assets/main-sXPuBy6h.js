@@ -824,6 +824,25 @@ function checkGameOver(players, deck) {
 * Хост авторитетен, гости отправляют actions
 * Поддержка 2-6 игроков (PeerJS + Firebase)
 */
+var RECONNECT_KEY = "durak_reconnect";
+function saveReconnect(data) {
+	try {
+		localStorage.setItem(RECONNECT_KEY, JSON.stringify(data));
+	} catch {}
+}
+function loadReconnect() {
+	try {
+		const raw = localStorage.getItem(RECONNECT_KEY);
+		return raw ? JSON.parse(raw) : null;
+	} catch {
+		return null;
+	}
+}
+function clearReconnect() {
+	try {
+		localStorage.removeItem(RECONNECT_KEY);
+	} catch {}
+}
 var unsubscribeGameStore = null;
 var useNetStore = create((set, get) => ({
 	network: null,
@@ -860,6 +879,11 @@ var useNetStore = create((set, get) => ({
 			error: null,
 			roomId
 		});
+		saveReconnect({
+			roomId: roomId || "",
+			playerIndex: 0,
+			backend
+		});
 		broadcastState(network, backend);
 		setTimeout(() => {
 			unsubscribeGameStore = useGameStore.subscribe((state) => {
@@ -893,6 +917,11 @@ var useNetStore = create((set, get) => ({
 			error: null,
 			roomId
 		});
+		if (roomId) saveReconnect({
+			roomId,
+			playerIndex: guestPlayerIndex,
+			backend
+		});
 	},
 	sendAction: (action) => {
 		const { network } = get();
@@ -909,6 +938,7 @@ var useNetStore = create((set, get) => ({
 		}
 		const { network } = get();
 		if (network) network.disconnect();
+		clearReconnect();
 		set({
 			network: null,
 			backend: "peerjs",
@@ -1019,7 +1049,7 @@ function rankDisplay(rank) {
 		};
 	}
 }
-function CardComponent({ card, trumpSuit, onClick, selected, disabled, faceDown, className = "", animating }) {
+function CardComponent({ card, trumpSuit, onClick, selected, disabled, faceDown, className = "", animating, style }) {
 	if (faceDown) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: `card-back ${className}` });
 	const color = SUIT_COLORS[card.suit];
 	const isTrump = trumpSuit && card.suit === trumpSuit;
@@ -1027,8 +1057,9 @@ function CardComponent({ card, trumpSuit, onClick, selected, disabled, faceDown,
 	const { short, full } = rankDisplay(card.rank);
 	const isFaceCard = card.rank >= 11;
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: `playing-card ${color === "red" ? "card-red" : "card-black"} ${selected ? "selected" : ""} ${isTrump ? "trump-card" : ""} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${animating === "play" ? "card-play-anim" : animating === "take" ? "card-take-anim" : animating === "discard" ? "card-discard-anim" : ""} ${className}`,
+		className: `playing-card ${color === "red" ? "card-red" : "card-black"} ${selected ? "selected" : ""} ${isTrump ? "trump-card" : ""} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${animating === "deal" ? "card-deal-anim" : animating === "play" ? "card-play-anim" : animating === "take" ? "card-take-anim" : animating === "discard" ? "card-discard-anim" : ""} ${className}`,
 		onClick: disabled ? void 0 : onClick,
+		style,
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: `card-corner top-left ${color === "red" ? "text-red-600" : "text-gray-800"}`,
@@ -5639,7 +5670,17 @@ function NetworkScreen({ onConnected, onBack }) {
 	const [error, setError] = (0, import_react.useState)("");
 	const [generatedRoomId, setGeneratedRoomId] = (0, import_react.useState)("");
 	const [playerCount, setPlayerCount] = (0, import_react.useState)(2);
+	const [reconnectData, setReconnectData] = (0, import_react.useState)(null);
+	const [lobbyPlayers, setLobbyPlayers] = (0, import_react.useState)([]);
+	const [lobbyMaxPlayers, setLobbyMaxPlayers] = (0, import_react.useState)(2);
 	const networkRef = (0, import_react.useRef)(null);
+	(0, import_react.useEffect)(() => {
+		const saved = loadReconnect();
+		if (saved) {
+			setReconnectData(saved);
+			setMode("reconnect");
+		}
+	}, []);
 	(0, import_react.useEffect)(() => {
 		return () => {
 			if (networkRef.current && mode !== "choose") {}
@@ -5663,16 +5704,20 @@ function NetworkScreen({ onConnected, onBack }) {
 						setStatus("");
 					}
 				});
-				const id = await network.host({ maxPlayers: playerCount });
-				setGeneratedRoomId(id);
-				setStatus(`Комната ${id} создана! Ожидание игроков...`);
-				const checkInterval = setInterval(() => {
-					if (network.playerList.length >= 2) {
-						clearInterval(checkInterval);
-						setStatus("Игроки подключены! Начинаем...");
-						setTimeout(() => onConnected(network, "host", "firebase"), 300);
+				setGeneratedRoomId(await network.host({ maxPlayers: playerCount }));
+				setLobbyMaxPlayers(playerCount);
+				setInterval(() => {
+					if ("playerList" in network) {
+						const players = network.playerList;
+						setLobbyPlayers(players.map((p) => ({
+							name: p.name,
+							index: p.index,
+							connected: p.connected
+						})));
 					}
 				}, 1e3);
+				setMode("lobby");
+				setStatus("");
 			} else {
 				const network = new PeerJSNetworkManager(PEERJS_CONFIG);
 				networkRef.current = network;
@@ -5776,6 +5821,78 @@ function NetworkScreen({ onConnected, onBack }) {
 			})
 		]
 	});
+	if (mode === "reconnect" && reconnectData) {
+		const handleReconnect = async () => {
+			setStatus("Подключение...");
+			setError("");
+			try {
+				if (reconnectData.backend === "firebase") {
+					const network = new FirebaseNetworkManager(FIREBASE_CONFIG);
+					networkRef.current = network;
+					network.on((event) => {
+						if (event.type === "error") {
+							setError(String(event.payload?.message || event.payload || "Ошибка подключения"));
+							setStatus("");
+						}
+					});
+					await network.join(reconnectData.roomId);
+					setStatus("Подключено!");
+					onConnected(network, "guest", "firebase");
+				} else setError("PeerJS реконнект не поддерживается. Создайте новую комнату.");
+			} catch (err) {
+				setError(err.message || "Ошибка подключения");
+				setStatus("");
+			}
+		};
+		const handleDiscard = () => {
+			clearReconnect();
+			setReconnectData(null);
+			setMode("choose");
+		};
+		return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "table-bg min-h-screen flex flex-col items-center justify-center gap-6",
+			children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "text-6xl",
+					children: "🔄"
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+					className: "text-3xl font-bold text-yellow-300",
+					children: "Незавершённая игра"
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "bg-black/40 rounded-xl p-6 text-center",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-green-200 mb-2",
+						children: "Обнаружена незавершённая сетевая игра:"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "text-2xl font-mono text-yellow-300",
+						children: ["Комната ", reconnectData.roomId]
+					})]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-col gap-3 w-full max-w-sm",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: handleReconnect,
+						className: "btn btn-primary text-xl px-8 py-3",
+						children: "🔄 Переподключиться"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: handleDiscard,
+						className: "btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2",
+						children: "✕ Новая игра"
+					})]
+				}),
+				status && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "text-green-200 text-sm",
+					children: status
+				}),
+				error && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "text-red-400 text-sm",
+					children: error
+				})
+			]
+		});
+	}
 	if (mode === "host_or_join") return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "table-bg min-h-screen flex flex-col items-center justify-center gap-6",
 		children: [
@@ -5939,6 +6056,87 @@ function NetworkScreen({ onConnected, onBack }) {
 			})
 		]
 	});
+	if (mode === "lobby") return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "table-bg min-h-screen flex flex-col items-center justify-center gap-6",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "text-6xl",
+				children: "🏠"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+				className: "text-3xl font-bold text-yellow-300",
+				children: "Лобби"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "bg-black/40 rounded-xl p-6 text-center",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-green-300 text-sm mb-2",
+						children: "Код комнаты:"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "text-3xl font-mono font-bold text-yellow-300 tracking-widest mb-3 select-all",
+						children: generatedRoomId
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: () => navigator.clipboard.writeText(generatedRoomId),
+						className: "btn btn-primary px-4 py-2 text-sm",
+						children: "📋 Скопировать код"
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "bg-black/30 rounded-xl p-4 w-full max-w-sm",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", {
+					className: "text-yellow-300 font-bold mb-2",
+					children: [
+						"Игроки (",
+						lobbyPlayers.length,
+						"/",
+						lobbyMaxPlayers,
+						"):"
+					]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ul", {
+					className: "space-y-2",
+					children: [lobbyPlayers.map((p, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", {
+						className: "flex items-center gap-2 text-green-200",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: p.connected ? "text-green-400" : "text-gray-500",
+								children: "●"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: p.name }),
+							i === 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "text-xs text-yellow-400 ml-1",
+								children: "(хост)"
+							})
+						]
+					}, i)), Array.from({ length: lobbyMaxPlayers - lobbyPlayers.length }, (_, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", {
+						className: "flex items-center gap-2 text-gray-600",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "○" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "italic",
+							children: "Ожидание..."
+						})]
+					}, `empty-${i}`))]
+				})]
+			}),
+			lobbyPlayers.length >= 2 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				onClick: () => {
+					if (networkRef.current) onConnected(networkRef.current, "host", "firebase");
+				},
+				className: "btn btn-primary text-xl px-8 py-3",
+				children: "🎴 Начать игру!"
+			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "text-green-300/60 text-sm",
+				children: "Ожидание игроков..."
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				onClick: cancelHost,
+				className: "btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2",
+				children: "Отмена"
+			})
+		]
+	});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "table-bg min-h-screen flex flex-col items-center justify-center gap-6",
 		children: [
@@ -6016,10 +6214,20 @@ function GameScreen() {
 	const prevTableRef = (0, import_react.useRef)(/* @__PURE__ */ new Set());
 	const [newCardIds, setNewCardIds] = (0, import_react.useState)(/* @__PURE__ */ new Set());
 	const [clearing, setClearing] = (0, import_react.useState)(false);
+	const [dealAnimating, setDealAnimating] = (0, import_react.useState)(false);
+	const prevPhaseRef = (0, import_react.useRef)("waiting");
 	const isNetworkMode = netStore.role !== null;
 	const myPlayerIndex = netStore.myPlayerIndex;
 	const netGameState = netStore.gameState;
 	const gameState = isNetworkMode ? netStore.role === "guest" ? netGameState : store : store;
+	(0, import_react.useEffect)(() => {
+		const currentPhase = gameState?.phase || "waiting";
+		if (prevPhaseRef.current === "dealing" && (currentPhase === "attacking" || currentPhase === "defending")) {
+			setDealAnimating(true);
+			setTimeout(() => setDealAnimating(false), 800);
+		}
+		prevPhaseRef.current = currentPhase;
+	}, [gameState?.phase]);
 	(0, import_react.useEffect)(() => {
 		const table = gameState?.table || [];
 		const lastAction = gameState?.lastAction || "";
@@ -6316,6 +6524,37 @@ function GameScreen() {
 		}
 		store.pass();
 	};
+	const TURN_TIMER_SECONDS = 30;
+	const [turnTimer, setTurnTimer] = (0, import_react.useState)(null);
+	const timerRef = (0, import_react.useRef)(null);
+	(0, import_react.useEffect)(() => {
+		if (isNetworkMode && amIActive && !aiThinking) {
+			setTurnTimer(TURN_TIMER_SECONDS);
+			const id = setInterval(() => {
+				setTurnTimer((prev) => {
+					if (prev === null || prev <= 1) {
+						clearInterval(id);
+						if (amIDefender) doTake();
+						else doPass();
+						return null;
+					}
+					return prev - 1;
+				});
+			}, 1e3);
+			timerRef.current = id;
+			return () => clearInterval(id);
+		} else {
+			setTurnTimer(null);
+			if (timerRef.current) {
+				clearInterval(timerRef.current);
+				timerRef.current = null;
+			}
+		}
+	}, [
+		isNetworkMode,
+		amIActive,
+		aiThinking
+	]);
 	const otherPlayers = players.map((p, i) => ({
 		...p,
 		index: i
@@ -6350,18 +6589,29 @@ function GameScreen() {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex items-center gap-2",
-						children: [isNetworkMode && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							className: netStore.connected ? "text-green-400" : "text-red-400",
-							children: netStore.connected ? "🟢" : "🔴"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-							className: "text-yellow-300 font-semibold",
-							children: aiThinking ? "🤔 Думает..." : myRole
-						})]
+						children: [
+							turnTimer !== null && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: `flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${turnTimer <= 5 ? "bg-red-600 text-white animate-pulse" : "bg-black/40 text-green-200"}`,
+								children: [
+									"⏱ ",
+									turnTimer,
+									"с"
+								]
+							}),
+							isNetworkMode && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: netStore.connected ? "text-green-400" : "text-red-400",
+								children: netStore.connected ? "🟢" : "🔴"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "text-yellow-300 font-semibold",
+								children: aiThinking ? "🤔 Думает..." : myRole
+							})
+						]
 					})
 				]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "flex flex-wrap justify-center gap-2 px-3 py-2",
+				className: "flex flex-wrap justify-center gap-2 px-3 py-2 sm:gap-3 sm:px-4",
 				children: otherPlayers.map((p) => {
 					const isDefender = p.index === defenderIdx;
 					const isAttacker = p.index === attackerIdx;
@@ -6395,7 +6645,7 @@ function GameScreen() {
 				})
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex-1 flex flex-col items-center justify-center gap-3 px-4",
+				className: "flex-1 flex flex-col items-center justify-center gap-2 px-2 sm:gap-3 sm:px-4",
 				children: [deck.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex items-center gap-1 mb-2",
 					children: [trumpCard && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardComponent, {
@@ -6441,11 +6691,11 @@ function GameScreen() {
 				})]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex justify-center gap-3 py-2 px-4 flex-wrap",
+				className: "flex justify-center gap-2 py-2 px-3 flex-wrap sm:gap-3 sm:px-4",
 				children: [
 					amIDefender && amIActive && table.some((ac) => !ac.defendCard) && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 						onClick: doTake,
-						className: "btn btn-danger",
+						className: "btn btn-danger min-h-[44px]",
 						disabled: aiThinking,
 						children: [
 							"📥 Взять (",
@@ -6455,13 +6705,13 @@ function GameScreen() {
 					}),
 					(amIAttacker || amIThrower) && amIActive && table.length > 0 && table.every((ac) => ac.defendCard) && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						onClick: doPass,
-						className: "btn btn-success",
+						className: "btn btn-success min-h-[44px]",
 						disabled: aiThinking,
 						children: "✅ Бито!"
 					}),
 					amIThrower && amIActive && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						onClick: doPass,
-						className: "btn bg-gray-700 hover:bg-gray-600 text-white",
+						className: "btn bg-gray-700 hover:bg-gray-600 text-white min-h-[44px]",
 						disabled: aiThinking,
 						children: "Пас"
 					}),
@@ -6489,7 +6739,7 @@ function GameScreen() {
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "player-hand flex justify-start gap-1 px-4 py-3 bg-black/30 min-h-[100px] flex-wrap items-end",
-				children: myHand.map((card) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardComponent, {
+				children: myHand.map((card, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CardComponent, {
 					card,
 					trumpSuit,
 					selected: selectedCard?.id === card.id,
@@ -6498,12 +6748,39 @@ function GameScreen() {
 						if (amIDefender) setSelectedCard(card);
 						else if (amIAttacker || amIThrower) doAttack(card);
 					},
-					disabled: aiThinking || !amIActive
+					disabled: aiThinking || !amIActive,
+					animating: dealAnimating ? "deal" : void 0,
+					style: dealAnimating ? { animationDelay: `${i * 50}ms` } : void 0
 				}, card.id))
 			}),
 			lastAction && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "text-center text-green-200/70 text-xs py-1 bg-black/20",
 				children: lastAction
+			}),
+			isNetworkMode && !netStore.connected && netStore.role === "guest" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-4 z-50",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "text-6xl",
+						children: "😱"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+						className: "text-2xl font-bold text-red-400",
+						children: "Хост отключился"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-green-200 text-sm",
+						children: "Соединение с хостом разорвано"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						onClick: () => {
+							netStore.disconnect();
+							store.resetGame();
+						},
+						className: "btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2",
+						children: "🔄 В меню"
+					})
+				]
 			})
 		]
 	});
