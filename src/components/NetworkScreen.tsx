@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { PeerJSNetworkManager, FirebaseNetworkManager } from 'game-network-lib';
 import type { NetworkBackend } from '../engine/netStore';
+import { loadReconnect, clearReconnect } from '../engine/netStore';
 import type { NetworkManagerInterface } from 'game-network-lib';
 
 export type NetworkProvider = 'firebase' | 'peerjs';
@@ -31,14 +32,24 @@ interface NetworkScreenProps {
 }
 
 export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
-  const [mode, setMode] = useState<'choose' | 'host_or_join' | 'backend' | 'host' | 'join'>('choose');
+  const [mode, setMode] = useState<'choose' | 'host_or_join' | 'backend' | 'host' | 'join' | 'reconnect'>('choose');
   const [provider, setProvider] = useState<NetworkProvider>('firebase');
   const [roomId, setRoomId] = useState('');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [generatedRoomId, setGeneratedRoomId] = useState('');
   const [playerCount, setPlayerCount] = useState(2);
+  const [reconnectData, setReconnectData] = useState<{ roomId: string; playerIndex: number; backend: NetworkBackend } | null>(null);
   const networkRef = useRef<NetworkManagerInterface | null>(null);
+
+  // Проверяем сохранённые данные для реконнекта
+  useEffect(() => {
+    const saved = loadReconnect();
+    if (saved) {
+      setReconnectData(saved);
+      setMode('reconnect');
+    }
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -191,6 +202,65 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
             ← Назад
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // ====== Экран реконнекта ======
+  if (mode === 'reconnect' && reconnectData) {
+    const handleReconnect = async () => {
+      setStatus('Подключение...');
+      setError('');
+
+      try {
+        if (reconnectData.backend === 'firebase') {
+          const network = new FirebaseNetworkManager(FIREBASE_CONFIG);
+          networkRef.current = network;
+
+          network.on((event) => {
+            if (event.type === 'error') {
+              setError(String((event.payload as any)?.message || event.payload || 'Ошибка подключения'));
+              setStatus('');
+            }
+          });
+
+          await network.join(reconnectData.roomId);
+          setStatus('Подключено!');
+          onConnected(network, 'guest', 'firebase');
+        } else {
+          // PeerJS реконнект
+          setError('PeerJS реконнект не поддерживается. Создайте новую комнату.');
+        }
+      } catch (err: any) {
+        setError(err.message || 'Ошибка подключения');
+        setStatus('');
+      }
+    };
+
+    const handleDiscard = () => {
+      clearReconnect();
+      setReconnectData(null);
+      setMode('choose');
+    };
+
+    return (
+      <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
+        <div className="text-6xl">🔄</div>
+        <h2 className="text-3xl font-bold text-yellow-300">Незавершённая игра</h2>
+        <div className="bg-black/40 rounded-xl p-6 text-center">
+          <p className="text-green-200 mb-2">Обнаружена незавершённая сетевая игра:</p>
+          <p className="text-2xl font-mono text-yellow-300">Комната {reconnectData.roomId}</p>
+        </div>
+        <div className="flex flex-col gap-3 w-full max-w-sm">
+          <button onClick={handleReconnect} className="btn btn-primary text-xl px-8 py-3">
+            🔄 Переподключиться
+          </button>
+          <button onClick={handleDiscard} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2">
+            ✕ Новая игра
+          </button>
+        </div>
+        {status && <p className="text-green-200 text-sm">{status}</p>}
+        {error && <p className="text-red-400 text-sm">{error}</p>}
       </div>
     );
   }
