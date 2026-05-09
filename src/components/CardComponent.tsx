@@ -24,10 +24,11 @@ interface CardProps {
   disabled?: boolean;
   faceDown?: boolean;
   className?: string;
-  animating?: 'play' | 'take' | 'discard';
+  animating?: 'deal' | 'play' | 'take' | 'discard';
+  style?: React.CSSProperties;
 }
 
-export function CardComponent({ card, trumpSuit, onClick, selected, disabled, faceDown, className = '', animating }: CardProps) {
+export function CardComponent({ card, trumpSuit, onClick, selected, disabled, faceDown, className = '', animating, style }: CardProps) {
   if (faceDown) {
     return <div className={`card-back ${className}`} />;
   }
@@ -38,7 +39,8 @@ export function CardComponent({ card, trumpSuit, onClick, selected, disabled, fa
   const { short, full } = rankDisplay(card.rank);
   const isFaceCard = card.rank >= 11;
 
-  const animClass = animating === 'play' ? 'card-play-anim'
+  const animClass = animating === 'deal' ? 'card-deal-anim'
+    : animating === 'play' ? 'card-play-anim'
     : animating === 'take' ? 'card-take-anim'
     : animating === 'discard' ? 'card-discard-anim'
     : '';
@@ -47,6 +49,7 @@ export function CardComponent({ card, trumpSuit, onClick, selected, disabled, fa
     <div
       className={`playing-card ${color === 'red' ? 'card-red' : 'card-black'} ${selected ? 'selected' : ''} ${isTrump ? 'trump-card' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${animClass} ${className}`}
       onClick={disabled ? undefined : onClick}
+      style={style}
     >
       {/* Верхний левый угол */}
       <div className={`card-corner top-left ${color === 'red' ? 'text-red-600' : 'text-gray-800'}`}>

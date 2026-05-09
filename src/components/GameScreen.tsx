@@ -25,6 +25,8 @@ export function GameScreen() {
   const prevTableRef = useRef<Set<string>>(new Set());
   const [newCardIds, setNewCardIds] = useState<Set<string>>(new Set());
   const [clearing, setClearing] = useState(false);
+  const [dealAnimating, setDealAnimating] = useState(false);
+  const prevPhaseRef = useRef<string>('waiting');
 
   const isNetworkMode = netStore.role !== null;
   const myPlayerIndex = netStore.myPlayerIndex;
@@ -34,6 +36,16 @@ export function GameScreen() {
   const gameState: GameState | null = isNetworkMode
     ? (netStore.role === 'guest' ? netGameState : store)
     : store;
+
+  // Анимация раздачи
+  useEffect(() => {
+    const currentPhase = gameState?.phase || 'waiting';
+    if (prevPhaseRef.current === 'dealing' && (currentPhase === 'attacking' || currentPhase === 'defending')) {
+      setDealAnimating(true);
+      setTimeout(() => setDealAnimating(false), 800);
+    }
+    prevPhaseRef.current = currentPhase;
+  }, [gameState?.phase]);
 
   useEffect(() => {
     const table = gameState?.table || [];
@@ -432,7 +444,7 @@ export function GameScreen() {
 
       {/* Моя рука */}
       <div className="player-hand flex justify-start gap-1 px-4 py-3 bg-black/30 min-h-[100px] flex-wrap items-end">
-        {myHand.map(card => (
+        {myHand.map((card, i) => (
           <CardComponent
             key={card.id}
             card={card}
@@ -447,6 +459,8 @@ export function GameScreen() {
               }
             }}
             disabled={aiThinking || !amIActive}
+            animating={dealAnimating ? 'deal' : undefined}
+            style={dealAnimating ? { animationDelay: `${i * 50}ms` } : undefined}
           />
         ))}
       </div>
