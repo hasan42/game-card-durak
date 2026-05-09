@@ -311,19 +311,22 @@ export function GameScreen() {
   const TURN_TIMER_SECONDS = 30;
   const [turnTimer, setTurnTimer] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerActionRef = useRef(false);
 
   useEffect(() => {
-    if (isNetworkMode && amIActive && !aiThinking) {
+    timerActionRef.current = false;
+    if (isNetworkMode && amIActive && !aiThinking && phase !== 'waiting') {
       setTurnTimer(TURN_TIMER_SECONDS);
       const id = setInterval(() => {
         setTurnTimer(prev => {
-          if (prev === null || prev <= 1) {
+          if (prev === null) return null;
+          if (prev <= 1) {
             clearInterval(id);
-            // Авто-действие при истечении
-            if (amIDefender) {
-              doTake();
-            } else {
-              doPass();
+            if (!timerActionRef.current) {
+              timerActionRef.current = true;
+              setTimeout(() => {
+                if (amIDefender) { doTake(); } else { doPass(); }
+              }, 0);
             }
             return null;
           }
@@ -339,7 +342,7 @@ export function GameScreen() {
         timerRef.current = null;
       }
     }
-  }, [isNetworkMode, amIActive, aiThinking]);
+  }, [isNetworkMode, amIActive, aiThinking, phase]);
 
   // Другие игроки (кроме меня)
   const otherPlayers = players.map((p, i) => ({ ...p, index: i }))
