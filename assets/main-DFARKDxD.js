@@ -6216,6 +6216,10 @@ function GameScreen() {
 	const [clearing, setClearing] = (0, import_react.useState)(false);
 	const [dealAnimating, setDealAnimating] = (0, import_react.useState)(false);
 	const prevPhaseRef = (0, import_react.useRef)("waiting");
+	const TURN_TIMER_SECONDS = 30;
+	const [turnTimer, setTurnTimer] = (0, import_react.useState)(null);
+	const timerRef = (0, import_react.useRef)(null);
+	const timerActionRef = (0, import_react.useRef)(false);
 	const isNetworkMode = netStore.role !== null;
 	const myPlayerIndex = netStore.myPlayerIndex;
 	const netGameState = netStore.gameState;
@@ -6524,10 +6528,6 @@ function GameScreen() {
 		}
 		store.pass();
 	};
-	const TURN_TIMER_SECONDS = 30;
-	const [turnTimer, setTurnTimer] = (0, import_react.useState)(null);
-	const timerRef = (0, import_react.useRef)(null);
-	const timerActionRef = (0, import_react.useRef)(false);
 	(0, import_react.useEffect)(() => {
 		timerActionRef.current = false;
 		if (isNetworkMode && amIActive && !aiThinking && phase !== "waiting") {
