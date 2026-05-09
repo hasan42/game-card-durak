@@ -32,7 +32,7 @@ interface NetworkScreenProps {
 }
 
 export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
-  const [mode, setMode] = useState<'choose' | 'host_or_join' | 'backend' | 'host' | 'join' | 'reconnect'>('choose');
+  const [mode, setMode] = useState<'choose' | 'host_or_join' | 'backend' | 'host' | 'join' | 'reconnect' | 'lobby'>('choose');
   const [provider, setProvider] = useState<NetworkProvider>('firebase');
   const [roomId, setRoomId] = useState('');
   const [status, setStatus] = useState('');
@@ -40,6 +40,8 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
   const [generatedRoomId, setGeneratedRoomId] = useState('');
   const [playerCount, setPlayerCount] = useState(2);
   const [reconnectData, setReconnectData] = useState<{ roomId: string; playerIndex: number; backend: NetworkBackend } | null>(null);
+  const [lobbyPlayers, setLobbyPlayers] = useState<{ name: string; index: number; connected: boolean }[]>([]);
+  const [lobbyMaxPlayers, setLobbyMaxPlayers] = useState(2);
   const networkRef = useRef<NetworkManagerInterface | null>(null);
 
   // Проверяем сохранённые данные для реконнекта
@@ -85,16 +87,18 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
 
         const id = await network.host({ maxPlayers: playerCount });
         setGeneratedRoomId(id);
-        setStatus(`Комната ${id} создана! Ожидание игроков...`);
+        setLobbyMaxPlayers(playerCount);
         
-        // Ждём подключения второго игрока
-        const checkInterval = setInterval(() => {
-          if (network.playerList.length >= 2) {
-            clearInterval(checkInterval);
-            setStatus('Игроки подключены! Начинаем...');
-            setTimeout(() => onConnected(network, 'host', 'firebase'), 300);
+        // Переход в лобби — обновляем список игроков
+        const pollLobby = setInterval(() => {
+          if ('playerList' in network) {
+            const players = (network as any).playerList as { id: string; name: string; index: number; connected: boolean }[];
+            setLobbyPlayers(players.map(p => ({ name: p.name, index: p.index, connected: p.connected })));
           }
         }, 1000);
+        void pollLobby;
+        setMode('lobby');
+        setStatus('');
       } else {
         // PeerJS
         const network = new PeerJSNetworkManager(PEERJS_CONFIG);
@@ -371,6 +375,63 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
             : 'Отправьте код другу. Когда он подключится, игра начнётся автоматически.'}
         </p>
         <button onClick={cancelHost} className="btn btn-danger px-6 py-2 mt-4">
+          Отмена
+        </button>
+      </div>
+    );
+  }
+
+  // ====== Лобби (хост Firebase) ======
+  if (mode === 'lobby') {
+    return (
+      <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
+        <div className="text-6xl">🏠</div>
+        <h2 className="text-3xl font-bold text-yellow-300">Лобби</h2>
+        
+        <div className="bg-black/40 rounded-xl p-6 text-center">
+          <p className="text-green-300 text-sm mb-2">Код комнаты:</p>
+          <div className="text-3xl font-mono font-bold text-yellow-300 tracking-widest mb-3 select-all">
+            {generatedRoomId}
+          </div>
+          <button onClick={() => navigator.clipboard.writeText(generatedRoomId)} className="btn btn-primary px-4 py-2 text-sm">
+            📋 Скопировать код
+          </button>
+        </div>
+
+        <div className="bg-black/30 rounded-xl p-4 w-full max-w-sm">
+          <h3 className="text-yellow-300 font-bold mb-2">Игроки ({lobbyPlayers.length}/{lobbyMaxPlayers}):</h3>
+          <ul className="space-y-2">
+            {lobbyPlayers.map((p, i) => (
+              <li key={i} className="flex items-center gap-2 text-green-200">
+                <span className={p.connected ? 'text-green-400' : 'text-gray-500'}>●</span>
+                <span>{p.name}</span>
+                {i === 0 && <span className="text-xs text-yellow-400 ml-1">(хост)</span>}
+              </li>
+            ))}
+            {Array.from({ length: lobbyMaxPlayers - lobbyPlayers.length }, (_, i) => (
+              <li key={`empty-${i}`} className="flex items-center gap-2 text-gray-600">
+                <span>○</span>
+                <span className="italic">Ожидание...</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {lobbyPlayers.length >= 2 ? (
+          <button
+            onClick={() => {
+              if (networkRef.current) {
+                onConnected(networkRef.current, 'host', 'firebase');
+              }
+            }}
+            className="btn btn-primary text-xl px-8 py-3">
+            🎴 Начать игру!
+          </button>
+        ) : (
+          <p className="text-green-300/60 text-sm">Ожидание игроков...</p>
+        )}
+
+        <button onClick={cancelHost} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2">
           Отмена
         </button>
       </div>
