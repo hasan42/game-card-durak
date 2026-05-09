@@ -4,15 +4,16 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { NetworkManager } from '../engine/network';
-import { FirebaseNetworkManager } from '../engine/firebaseNetwork';
+import { PeerJSNetworkManager } from 'game-network-lib';
+import { FirebaseNetworkManager } from 'game-network-lib';
 import { VKNetworkManager } from '../engine/vkNetwork';
 import type { NetworkBackend } from '../engine/netStore';
+import type { NetworkManagerInterface } from 'game-network-lib';
 
 export type NetworkProvider = 'firebase' | 'peerjs' | 'vk';
 
 interface NetworkScreenProps {
-  onConnected: (network: NetworkManager | FirebaseNetworkManager | VKNetworkManager, role: 'host' | 'guest', backend: NetworkBackend) => void;
+  onConnected: (network: NetworkManagerInterface | VKNetworkManager, role: 'host' | 'guest', backend: NetworkBackend) => void;
   onBack: () => void;
 }
 
@@ -24,7 +25,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
   const [error, setError] = useState('');
   const [generatedRoomId, setGeneratedRoomId] = useState('');
   const [playerCount, setPlayerCount] = useState(2);
-  const networkRef = useRef<NetworkManager | FirebaseNetworkManager | null>(null);
+  const networkRef = useRef<NetworkManagerInterface | VKNetworkManager | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -41,7 +42,15 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
 
     try {
       if (provider === 'firebase') {
-        const network = new FirebaseNetworkManager();
+        const firebaseConfig = {
+          apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+          authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+          projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+          storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+          messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+          appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+        };
+        const network = new FirebaseNetworkManager(firebaseConfig);
         networkRef.current = network;
 
         network.on((event) => {
@@ -53,12 +62,12 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
             setError('Соединение разорвано');
           }
           if (event.type === 'error') {
-            setError(String(event.payload?.message || event.payload || 'Ошибка'));
+            setError(String((event.payload as any)?.message || event.payload || 'Ошибка'));
             setStatus('');
           }
         });
 
-        const id = await network.host(playerCount);
+        const id = await network.host({ maxPlayers: playerCount });
         setGeneratedRoomId(id);
         setStatus(`Комната ${id} создана! Ожидание игроков...`);
         
@@ -83,7 +92,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
             setError('Соединение разорвано');
           }
           if (event.type === 'error') {
-            setError(String(event.payload?.message || event.payload || 'Ошибка'));
+            setError(String((event.payload as any)?.message || event.payload || 'Ошибка'));
             setStatus('');
           }
         });
@@ -102,7 +111,11 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
         }, 1000);
       } else {
         // PeerJS
-        const network = new NetworkManager();
+        const network = new PeerJSNetworkManager({
+          host: typeof window !== 'undefined' ? window.location.hostname : 'localhost',
+          port: 9000,
+          path: '/myapp',
+        });
         networkRef.current = network;
 
         network.on((event) => {
@@ -114,7 +127,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
             setError('Соединение разорвано');
           }
           if (event.type === 'error') {
-            setError(String(event.payload?.message || event.payload || 'Ошибка'));
+            setError(String((event.payload as any)?.message || event.payload || 'Ошибка'));
             setStatus('');
           }
         });
@@ -139,12 +152,20 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
 
     try {
       if (provider === 'firebase' || provider === 'vk') {
-        const network = provider === 'vk' ? new VKNetworkManager() : new FirebaseNetworkManager();
+        const firebaseConfig = provider === 'vk' ? undefined : {
+          apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+          authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+          projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+          storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+          messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+          appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+        };
+        const network = provider === 'vk' ? new VKNetworkManager() : new FirebaseNetworkManager(firebaseConfig!);
         networkRef.current = network;
 
         network.on((event) => {
           if (event.type === 'error') {
-            setError(String(event.payload?.message || event.payload || 'Ошибка подключения'));
+            setError(String((event.payload as any)?.message || event.payload || 'Ошибка подключения'));
             setStatus('');
           }
         });
@@ -154,12 +175,16 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
         onConnected(network, 'guest', 'firebase');
       } else {
         // PeerJS
-        const network = new NetworkManager();
+        const network = new PeerJSNetworkManager({
+          host: typeof window !== 'undefined' ? window.location.hostname : 'localhost',
+          port: 9000,
+          path: '/myapp',
+        });
         networkRef.current = network;
 
         network.on((event) => {
           if (event.type === 'error') {
-            setError(String(event.payload?.message || event.payload || 'Ошибка подключения'));
+            setError(String((event.payload as any)?.message || event.payload || 'Ошибка подключения'));
             setStatus('');
           }
         });

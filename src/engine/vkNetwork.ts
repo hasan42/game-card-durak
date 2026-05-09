@@ -7,14 +7,27 @@
  * - VK Bridge для уведомлений
  */
 
-import { FirebaseNetworkManager } from './firebaseNetwork';
+import { FirebaseNetworkManager } from 'game-network-lib';
+import type { FirebaseConfig } from 'game-network-lib';
 import { bridge, isVKEnvironment } from '../vk';
 
+const VK_FIREBASE_CONFIG: FirebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+};
+
 export class VKNetworkManager extends FirebaseNetworkManager {
+  constructor() {
+    super(VK_FIREBASE_CONFIG);
+  }
 
   /** Создать комнату с VK-приглашением */
   async hostWithVKInvite(maxPlayers: number = 2): Promise<string> {
-    const roomId = await this.host(maxPlayers);
+    const roomId = await this.host({ maxPlayers });
 
     // Показать VK Share для приглашения друзей
     if (isVKEnvironment()) {
@@ -43,7 +56,7 @@ export class VKNetworkManager extends FirebaseNetworkManager {
       throw new Error('Не найден код комнаты в параметрах VK');
     }
 
-    await this.join(roomId, playerName);
+    await this.join(roomId, { playerName });
   }
 
   /** Получить список друзей VK (если разрешено) */
@@ -74,8 +87,6 @@ export class VKNetworkManager extends FirebaseNetworkManager {
     if (!isVKEnvironment()) return;
 
     try {
-      // VK не позволяет произвольные уведомления,
-      // но можно использовать VKWebAppShowWallPostBox
       await bridge.send('VKWebAppShowWallPostBox', {
         message,
       });

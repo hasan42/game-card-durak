@@ -9,9 +9,8 @@ import { CardComponent } from './CardComponent';
 import { NetworkScreen } from './NetworkScreen';
 import { SUIT_SYMBOLS, RANK_NAMES, SUIT_NAMES } from '../engine/cards';
 import type { Card, GameState } from '../engine/types';
-import type { NetworkRole } from '../engine/network';
-import { NetworkManager } from '../engine/network';
-import { FirebaseNetworkManager } from '../engine/firebaseNetwork';
+import type { NetworkRole } from 'game-network-lib';
+import type { NetworkManagerInterface } from 'game-network-lib';
 import { VKNetworkManager } from '../engine/vkNetwork';
 import { isVKEnvironment } from '../vk';
 import type { NetworkBackend } from '../engine/netStore';
@@ -91,7 +90,7 @@ export function GameScreen() {
   if (showNetwork && !isNetworkMode) {
     return (
       <NetworkScreen
-        onConnected={(network: NetworkManager | FirebaseNetworkManager | VKNetworkManager, role: NetworkRole, backend: NetworkBackend) => {
+        onConnected={(network: NetworkManagerInterface | VKNetworkManager, role: NetworkRole, backend: NetworkBackend) => {
           // Откладываем инициализацию, чтобы React закончил текущий рендер
           queueMicrotask(() => {
             // Инициализируем сетевой store
