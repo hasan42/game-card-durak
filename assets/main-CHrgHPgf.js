@@ -996,7 +996,7 @@ var __vitePreload = function preload(baseModule, deps, importerUrl) {
 };
 //#endregion
 //#region src/lib/network/firebaseNetwork.ts
-var FirebaseNetworkManager = class {
+var FirebaseNetworkManager$1 = class {
 	config;
 	_roomId = "";
 	myId = "";
@@ -1282,7 +1282,7 @@ function isVKEnvironment$1() {
 	const urlParams = new URLSearchParams(window.location.search);
 	return urlParams.has("vk_access_token_settings") || urlParams.has("vk_user_id") || urlParams.has("vk_app_id") || urlParams.has("vk_platform");
 }
-var VKNetworkManager = class extends FirebaseNetworkManager {
+var VKNetworkManager$1 = class extends FirebaseNetworkManager$1 {
 	vkConfig;
 	constructor(config = {}) {
 		super(config);
@@ -5760,6 +5760,82 @@ var NetworkManager = class {
 	}
 	get roomId() {
 		return this.isHost ? this.myId : this.connection?.peer || "";
+	}
+};
+//#endregion
+//#region src/engine/firebase.ts
+/**
+* Firebase config for game-card-durak — uses the library's parameterized helpers.
+* This file provides the game-specific Firebase config and collection names.
+*/
+var DURAK_COLLECTIONS = {
+	rooms: "durak_rooms",
+	players: "durak_players",
+	actions: "durak_actions"
+};
+var initialized = false;
+function ensureInit() {
+	if (!initialized) {
+		const config = {
+			apiKey: "AIzaSyA9dgeYI_Axx5gqgPacoBf_HGPncwT8qoU",
+			authDomain: "game-card-durak.firebaseapp.com",
+			projectId: "game-card-durak",
+			storageBucket: "game-card-durak.firebasestorage.app",
+			messagingSenderId: "872670434332",
+			appId: "1:872670434332:web:a59d4438fffb0e6c85bbd9"
+		};
+		if (!config.apiKey || !config.projectId) throw new Error("Firebase not configured. Set VITE_FIREBASE_* env variables.");
+		initFirebase(config);
+		initialized = true;
+	}
+}
+//#endregion
+//#region src/engine/firebaseNetwork.ts
+/**
+* Game-specific FirebaseNetworkManager — uses durak_ collection prefix.
+* Delegates to the library's FirebaseNetworkManager.
+* Auto-initializes Firebase from VITE_FIREBASE_* env variables.
+*/
+/** Game-specific Firebase config with durak_ collection names */
+var GAME_CONFIG = {
+	collections: DURAK_COLLECTIONS,
+	defaultHostName: "Игрок 1",
+	defaultGuestNamePrefix: "Игрок"
+};
+/**
+* FirebaseNetworkManager for Durak — pre-configured with game collections.
+* Auto-initializes Firebase from VITE_FIREBASE_* env variables.
+*/
+var FirebaseNetworkManager = class extends FirebaseNetworkManager$1 {
+	constructor(config) {
+		ensureInit();
+		super({
+			...GAME_CONFIG,
+			...config,
+			collections: config?.collections ?? DURAK_COLLECTIONS
+		});
+	}
+};
+//#endregion
+//#region src/engine/vkNetwork.ts
+/**
+* Game-specific VKNetworkManager — extends FirebaseNetworkManager with VK integration.
+* Auto-initializes Firebase from VITE_FIREBASE_* env variables.
+*/
+var GAME_VK_CONFIG = {
+	collections: DURAK_COLLECTIONS,
+	defaultHostName: "Игрок 1",
+	defaultGuestNamePrefix: "Игрок",
+	appId: "{APP_ID}"
+};
+var VKNetworkManager = class extends VKNetworkManager$1 {
+	constructor(config) {
+		ensureInit();
+		super({
+			...GAME_VK_CONFIG,
+			...config,
+			collections: config?.collections ?? DURAK_COLLECTIONS
+		});
 	}
 };
 //#endregion
