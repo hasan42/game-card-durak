@@ -90,8 +90,8 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
     set({ network, backend, role: 'host', myPlayerIndex: 0, connected: true, error: null, roomId });
 
-    // Сохраняем для реконнекта
-    saveReconnect({ roomId: roomId || '', playerIndex: 0, backend });
+    // Реконнект только для гостей — хост создаёт новую комнату
+    // saveReconnect({ roomId: roomId || '', playerIndex: 0, backend });
 
     // Немедленно рассылаем текущее состояние
     broadcastState(network, backend);
