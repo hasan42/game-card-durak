@@ -6527,15 +6527,23 @@ function GameScreen() {
 	const TURN_TIMER_SECONDS = 30;
 	const [turnTimer, setTurnTimer] = (0, import_react.useState)(null);
 	const timerRef = (0, import_react.useRef)(null);
+	const timerActionRef = (0, import_react.useRef)(false);
 	(0, import_react.useEffect)(() => {
-		if (isNetworkMode && amIActive && !aiThinking) {
+		timerActionRef.current = false;
+		if (isNetworkMode && amIActive && !aiThinking && phase !== "waiting") {
 			setTurnTimer(TURN_TIMER_SECONDS);
 			const id = setInterval(() => {
 				setTurnTimer((prev) => {
-					if (prev === null || prev <= 1) {
+					if (prev === null) return null;
+					if (prev <= 1) {
 						clearInterval(id);
-						if (amIDefender) doTake();
-						else doPass();
+						if (!timerActionRef.current) {
+							timerActionRef.current = true;
+							setTimeout(() => {
+								if (amIDefender) doTake();
+								else doPass();
+							}, 0);
+						}
 						return null;
 					}
 					return prev - 1;
@@ -6553,7 +6561,8 @@ function GameScreen() {
 	}, [
 		isNetworkMode,
 		amIActive,
-		aiThinking
+		aiThinking,
+		phase
 	]);
 	const otherPlayers = players.map((p, i) => ({
 		...p,
