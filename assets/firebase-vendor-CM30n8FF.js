@@ -2059,6 +2059,20 @@ function registerCoreComponents(variant) {
 registerCoreComponents("");
 //#endregion
 //#region node_modules/firebase/app/dist/esm/index.esm.js
+var index_esm_exports$1 = /* @__PURE__ */ __exportAll({
+	SDK_VERSION: () => SDK_VERSION,
+	_DEFAULT_ENTRY_NAME: () => DEFAULT_ENTRY_NAME,
+	_addComponent: () => _addComponent,
+	_apps: () => _apps,
+	_components: () => _components,
+	_getProvider: () => _getProvider,
+	_isFirebaseServerApp: () => _isFirebaseServerApp,
+	_registerComponent: () => _registerComponent,
+	_serverApps: () => _serverApps,
+	getApp: () => getApp,
+	initializeApp: () => initializeApp,
+	registerVersion: () => registerVersion
+});
 /**
 * @license
 * Copyright 2020 Google LLC
@@ -16040,6 +16054,7 @@ var index_esm_exports = /* @__PURE__ */ __exportAll({
 	doc: () => doc,
 	executeWrite: () => executeWrite,
 	getDoc: () => getDoc,
+	getFirestore: () => getFirestore,
 	onSnapshot: () => onSnapshot,
 	orderBy: () => orderBy,
 	query: () => query,
@@ -16048,4 +16063,4 @@ var index_esm_exports = /* @__PURE__ */ __exportAll({
 	updateDoc: () => updateDoc
 });
 //#endregion
-export { setDoc as a, doc as c, initializeApp as d, onSnapshot as i, getFirestore as l, deleteDoc as n, updateDoc as o, getDoc as r, collection as s, index_esm_exports as t, serverTimestamp as u };
+export { index_esm_exports$1 as n, index_esm_exports as t };

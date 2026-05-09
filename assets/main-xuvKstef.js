@@ -1,7 +1,6 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/firebase-3vXzaqtW.js","assets/rolldown-runtime-BZ_oHznj.js","assets/firebase-vendor-BbM1Nia1.js"])))=>i.map(i=>d[i]);
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/firebase-vendor-CM30n8FF.js","assets/rolldown-runtime-BZ_oHznj.js"])))=>i.map(i=>d[i]);
 import { n as __exportAll, r as __toESM, t as __commonJSMin } from "./rolldown-runtime-BZ_oHznj.js";
 import { n as require_client, r as require_react, t as require_jsx_runtime } from "./react-vendor-_7n9mxq1.js";
-import { a as roomExists, c as updateGameState, i as leaveRoom, o as subscribePlayers, r as joinRoom, s as subscribeRoom, t as createRoom } from "./firebase-3vXzaqtW.js";
 //#region \0vite/modulepreload-polyfill.js
 (function polyfill() {
 	const relList = document.createElement("link").relList;
@@ -4800,176 +4799,6 @@ var $dd0187d7f28e386f$export$2e2bcd8739ae039 = class $416260bce337df90$export$ec
 	}
 };
 //#endregion
-//#region src/engine/network.ts
-/**
-* PeerJS сетевой модуль для игры «Дурак»
-* P2P через WebRTC с сигнальным сервером PeerJS
-*
-* API: EventEmitter-стиль — подписка через on()/onData(), отправка через send()
-*/
-function getPeerConfig() {
-	const localPeerHost = "192.168.0.78";
-	const localPeerPort = 9e3;
-	const localPeerPath = "/myapp";
-	const currentHost = typeof window !== "undefined" ? window.location.hostname : "";
-	const isLocalNetwork = currentHost === localPeerHost || currentHost === "localhost" || currentHost === "127.0.0.1";
-	return {
-		host: isLocalNetwork ? currentHost : localPeerHost,
-		port: localPeerPort,
-		path: localPeerPath,
-		secure: isLocalNetwork ? false : false,
-		config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }] }
-	};
-}
-var NetworkManager = class {
-	peer = null;
-	connection = null;
-	myId = "";
-	myRole = null;
-	isHost = false;
-	listeners = [];
-	/** Подписаться на все события */
-	on(listener) {
-		this.listeners.push(listener);
-		return () => {
-			this.listeners = this.listeners.filter((l) => l !== listener);
-		};
-	}
-	/** Подписка только на data-события (входящие сообщения) */
-	onData(callback) {
-		return this.on((event) => {
-			if (event.type === "data") callback(event.payload);
-		});
-	}
-	emit(event) {
-		for (const listener of this.listeners) try {
-			listener(event);
-		} catch (e) {
-			console.error("[Network] Listener error:", e);
-		}
-	}
-	/** Создать комнату (хост). Resolves с room ID. */
-	async host() {
-		return new Promise((resolve, reject) => {
-			this.peer = new $dd0187d7f28e386f$export$2e2bcd8739ae039(getPeerConfig());
-			this.isHost = true;
-			this.myRole = "host";
-			this.peer.on("open", (id) => {
-				this.myId = id;
-				console.log("[Network] Host created, room ID:", id);
-				this.peer.on("connection", (conn) => {
-					console.log("[Network] Guest connected:", conn.peer);
-					this.connection = conn;
-					this.setupConnection(conn);
-					this.emit({
-						type: "connected",
-						payload: { role: "host" }
-					});
-				});
-				resolve(id);
-			});
-			this.peer.on("error", (err) => {
-				console.error("[Network] Host error:", err);
-				this.emit({
-					type: "error",
-					payload: err
-				});
-				reject(err);
-			});
-			this.peer.on("disconnected", () => {
-				this.emit({ type: "disconnected" });
-			});
-		});
-	}
-	/** Присоединиться к комнате (гость) */
-	async join(roomId) {
-		return new Promise((resolve, reject) => {
-			this.peer = new $dd0187d7f28e386f$export$2e2bcd8739ae039(getPeerConfig());
-			this.isHost = false;
-			this.myRole = "guest";
-			this.peer.on("open", (id) => {
-				this.myId = id;
-				console.log("[Network] Joining room:", roomId);
-				const conn = this.peer.connect(roomId, { reliable: true });
-				this.connection = conn;
-				conn.on("open", () => {
-					console.log("[Network] Connected to host");
-					this.setupConnection(conn);
-					this.emit({
-						type: "connected",
-						payload: { role: "guest" }
-					});
-					resolve();
-				});
-				conn.on("error", (err) => {
-					console.error("[Network] Connection error:", err);
-					this.emit({
-						type: "error",
-						payload: err
-					});
-					reject(err);
-				});
-			});
-			this.peer.on("error", (err) => {
-				console.error("[Network] Guest error:", err);
-				this.emit({
-					type: "error",
-					payload: err
-				});
-				reject(err);
-			});
-		});
-	}
-	setupConnection(conn) {
-		conn.on("data", (data) => {
-			this.emit({
-				type: "data",
-				payload: data
-			});
-		});
-		conn.on("close", () => {
-			console.log("[Network] Connection closed");
-			this.connection = null;
-			this.emit({ type: "disconnected" });
-		});
-	}
-	/** Отправить данные по сети */
-	send(data) {
-		if (!this.connection) {
-			console.warn("[Network] No connection, cannot send");
-			return false;
-		}
-		if (this.connection.open === false) {
-			console.warn("[Network] Connection not open, cannot send");
-			return false;
-		}
-		this.connection.send(data);
-		return true;
-	}
-	/** Отключиться и уничтожить соединение */
-	disconnect() {
-		if (this.connection) {
-			this.connection.close();
-			this.connection = null;
-		}
-		if (this.peer) {
-			this.peer.destroy();
-			this.peer = null;
-		}
-		this.myRole = null;
-		this.listeners = [];
-	}
-	get role() {
-		return this.myRole;
-	}
-	get connected() {
-		return this.connection !== null && this.connection.open;
-	}
-	get roomId() {
-		return this.isHost ? this.myId : this.connection?.peer || "";
-	}
-};
-//#endregion
 //#region \0vite/preload-helper.js
 var scriptRel = "modulepreload";
 var assetsURL = function(dep) {
@@ -5030,19 +4859,311 @@ var __vitePreload = function preload(baseModule, deps, importerUrl) {
 	});
 };
 //#endregion
-//#region src/engine/firebaseNetwork.ts
+//#region node_modules/game-network-lib/dist/index.mjs
+var GameNetwork = class {
+	constructor(config) {
+		this.network = null;
+		this.config = config;
+		this._status = {
+			backend: config.backend,
+			role: null,
+			myPlayerIndex: -1,
+			connected: false,
+			error: null,
+			roomId: null
+		};
+	}
+	get status() {
+		return { ...this._status };
+	}
+	/** Initialize as host */
+	async initHost(network) {
+		this.network = network;
+		const roomId = await network.host();
+		network.onData((data) => {
+			const msg = data;
+			if (msg.type === "action" && msg.action) {
+				const playerIndex = msg.playerIndex ?? msg.action.playerIndex ?? -1;
+				const innerAction = msg.action.action ?? msg.action;
+				this.config.onAction?.({
+					...innerAction,
+					playerIndex
+				});
+			}
+		});
+		network.on((event) => {
+			if (event.type === "disconnected") {
+				this._status.connected = false;
+				this.config.onConnectionChange?.(false, this._status.role);
+			}
+			if (event.type === "error") {
+				this._status.error = String(event.payload ?? "Network error");
+				this.config.onError?.(this._status.error);
+			}
+		});
+		this._status = {
+			...this._status,
+			role: "host",
+			myPlayerIndex: 0,
+			connected: true,
+			error: null,
+			roomId
+		};
+		this.config.onConnectionChange?.(true, "host");
+		return roomId;
+	}
+	/** Initialize as guest */
+	async initGuest(network, playerIndex) {
+		this.network = network;
+		await network.join("");
+		const myIndex = playerIndex ?? 1;
+		network.onData((data) => {
+			const msg = data;
+			if (msg.type === "full_state" && msg.state) {
+				const idx = msg.myPlayerIndex ?? myIndex;
+				this._status.myPlayerIndex = idx;
+				this.config.onState?.(msg.state, idx);
+			}
+		});
+		network.on((event) => {
+			if (event.type === "disconnected") {
+				this._status.connected = false;
+				this.config.onConnectionChange?.(false, this._status.role);
+			}
+			if (event.type === "error") {
+				this._status.error = String(event.payload ?? "Network error");
+				this.config.onError?.(this._status.error);
+			}
+		});
+		this._status = {
+			...this._status,
+			role: "guest",
+			myPlayerIndex: myIndex,
+			connected: true,
+			error: null,
+			roomId: "roomId" in network ? network.roomId : null
+		};
+		this.config.onConnectionChange?.(true, "guest");
+	}
+	/** Send an action (guest → host) */
+	sendAction(action) {
+		if (!this.network) return false;
+		return this.network.send({
+			type: "action",
+			action
+		});
+	}
+	/** Broadcast game state (host → guests) */
+	broadcastState(state) {
+		if (!this.network) return false;
+		return this.network.send({
+			type: "full_state",
+			state
+		});
+	}
+	/** Disconnect */
+	disconnect() {
+		this.network?.disconnect();
+		this.network = null;
+		this._status = {
+			...this._status,
+			role: null,
+			myPlayerIndex: -1,
+			connected: false,
+			error: null,
+			roomId: null
+		};
+		this.config.onConnectionChange?.(false, null);
+	}
+};
+var DEFAULT_ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
+var PeerJSNetworkManager = class {
+	constructor(config) {
+		this.peer = null;
+		this.connection = null;
+		this.myId = "";
+		this._isHost = false;
+		this._role = null;
+		this.listeners = [];
+		this.config = config;
+	}
+	getPeerOptions() {
+		return {
+			host: this.config.host,
+			port: this.config.port,
+			path: this.config.path,
+			secure: this.config.secure ?? false,
+			config: { iceServers: this.config.iceServers ?? DEFAULT_ICE_SERVERS }
+		};
+	}
+	on(listener) {
+		this.listeners.push(listener);
+		return () => {
+			this.listeners = this.listeners.filter((l) => l !== listener);
+		};
+	}
+	onData(callback) {
+		return this.on((event) => {
+			if (event.type === "data") callback(event.payload);
+		});
+	}
+	emit(event) {
+		for (const listener of this.listeners) try {
+			listener(event);
+		} catch (e) {
+			console.error("[PeerJSNetwork] Listener error:", e);
+		}
+	}
+	async host(options) {
+		return new Promise((resolve, reject) => {
+			this.peer = new $dd0187d7f28e386f$export$2e2bcd8739ae039(this.getPeerOptions());
+			this._isHost = true;
+			this._role = "host";
+			this.peer.on("open", (id) => {
+				this.myId = id;
+				console.log("[PeerJSNetwork] Host created, room ID:", id);
+				this.peer.on("connection", (conn) => {
+					console.log("[PeerJSNetwork] Guest connected:", conn.peer);
+					this.connection = conn;
+					this.setupConnection(conn);
+					this.emit({
+						type: "connected",
+						payload: { role: "host" }
+					});
+				});
+				resolve(id);
+			});
+			this.peer.on("error", (err) => {
+				console.error("[PeerJSNetwork] Host error:", err);
+				this.emit({
+					type: "error",
+					payload: err
+				});
+				reject(err);
+			});
+			this.peer.on("disconnected", () => {
+				this.emit({ type: "disconnected" });
+			});
+		});
+	}
+	async join(roomId) {
+		return new Promise((resolve, reject) => {
+			this.peer = new $dd0187d7f28e386f$export$2e2bcd8739ae039(this.getPeerOptions());
+			this._isHost = false;
+			this._role = "guest";
+			this.peer.on("open", (id) => {
+				this.myId = id;
+				console.log("[PeerJSNetwork] Joining room:", roomId);
+				const conn = this.peer.connect(roomId, { reliable: true });
+				this.connection = conn;
+				conn.on("open", () => {
+					console.log("[PeerJSNetwork] Connected to host");
+					this.setupConnection(conn);
+					this.emit({
+						type: "connected",
+						payload: { role: "guest" }
+					});
+					resolve();
+				});
+				conn.on("error", (err) => {
+					console.error("[PeerJSNetwork] Connection error:", err);
+					this.emit({
+						type: "error",
+						payload: err
+					});
+					reject(err);
+				});
+			});
+			this.peer.on("error", (err) => {
+				console.error("[PeerJSNetwork] Guest error:", err);
+				this.emit({
+					type: "error",
+					payload: err
+				});
+				reject(err);
+			});
+		});
+	}
+	setupConnection(conn) {
+		conn.on("data", (data) => {
+			this.emit({
+				type: "data",
+				payload: data
+			});
+		});
+		conn.on("close", () => {
+			console.log("[PeerJSNetwork] Connection closed");
+			this.connection = null;
+			this.emit({ type: "disconnected" });
+		});
+	}
+	send(data) {
+		if (!this.connection) {
+			console.warn("[PeerJSNetwork] No connection, cannot send");
+			return false;
+		}
+		if (this.connection.open === false) {
+			console.warn("[PeerJSNetwork] Connection not open, cannot send");
+			return false;
+		}
+		this.connection.send(data);
+		return true;
+	}
+	disconnect() {
+		if (this.connection) {
+			this.connection.close();
+			this.connection = null;
+		}
+		if (this.peer) {
+			this.peer.destroy();
+			this.peer = null;
+		}
+		this._role = null;
+		this.listeners = [];
+	}
+	get role() {
+		return this._role;
+	}
+	get connected() {
+		return this.connection !== null && this.connection.open;
+	}
+	get roomId() {
+		return this._isHost ? this.myId : this.connection?.peer || "";
+	}
+};
 var FirebaseNetworkManager = class {
-	_roomId = "";
-	myId = "";
-	myRole = null;
-	myPlayerIndex = -1;
-	_isHost = false;
-	listeners = [];
-	unsubscribeRoom = null;
-	unsubscribePlayers = null;
-	_connected = false;
-	_players = [];
-	heartbeatInterval = null;
+	constructor(config) {
+		this._roomId = "";
+		this.myId = "";
+		this._role = null;
+		this._playerIndex = -1;
+		this._isHost = false;
+		this._connected = false;
+		this.listeners = [];
+		this.unsubscribeRoom = null;
+		this.unsubscribePlayers = null;
+		this.unsubscribeActions = null;
+		this._players = [];
+		this.heartbeatInterval = null;
+		this._app = null;
+		this._db = null;
+		this.firebaseConfig = config;
+	}
+	async getDb() {
+		if (!this._db) {
+			const { initializeApp } = await __vitePreload(async () => {
+				const { initializeApp } = await import("./firebase-vendor-CM30n8FF.js").then((n) => n.n);
+				return { initializeApp };
+			}, __vite__mapDeps([0,1]));
+			const { getFirestore } = await __vitePreload(async () => {
+				const { getFirestore } = await import("./firebase-vendor-CM30n8FF.js").then((n) => n.t);
+				return { getFirestore };
+			}, __vite__mapDeps([0,1]));
+			this._app = initializeApp(this.firebaseConfig);
+			this._db = getFirestore(this._app);
+		}
+		return this._db;
+	}
 	on(listener) {
 		this.listeners.push(listener);
 		return () => {
@@ -5061,19 +5182,45 @@ var FirebaseNetworkManager = class {
 			console.error("[FirebaseNetwork] Listener error:", e);
 		}
 	}
-	/** Создать комнату (хост) */
-	async host(maxPlayers = 2) {
+	async host(options) {
+		const db = await this.getDb();
+		const { doc, setDoc, serverTimestamp } = await __vitePreload(async () => {
+			const { doc, setDoc, serverTimestamp } = await import("./firebase-vendor-CM30n8FF.js").then((n) => n.t);
+			return {
+				doc,
+				setDoc,
+				serverTimestamp
+			};
+		}, __vite__mapDeps([0,1]));
+		const maxPlayers = options?.maxPlayers ?? 2;
+		const hostName = options?.hostName ?? "Host";
 		const roomId = this.generateRoomId();
 		const hostId = this.generatePlayerId();
 		this._roomId = roomId;
 		this.myId = hostId;
 		this._isHost = true;
-		this.myRole = "host";
-		this.myPlayerIndex = 0;
-		await createRoom(roomId, hostId, "Игрок 1", maxPlayers);
-		await this.registerAsPlayer(roomId, hostId, "Игрок 1", 0);
-		this.startHeartbeat();
-		this.startSubscriptions();
+		this._role = "host";
+		this._playerIndex = 0;
+		await setDoc(doc(db, "game_rooms", roomId), {
+			id: roomId,
+			hostId,
+			hostName,
+			playerCount: 1,
+			maxPlayers,
+			status: "waiting",
+			createdAt: serverTimestamp(),
+			updatedAt: serverTimestamp()
+		});
+		await setDoc(doc(db, "game_rooms", roomId, "players", hostId), {
+			id: hostId,
+			name: "Host",
+			roomId,
+			index: 0,
+			connected: true,
+			lastSeen: serverTimestamp()
+		});
+		this.startHeartbeat(db);
+		this.startSubscriptions(db);
 		this._connected = true;
 		this.emit({
 			type: "connected",
@@ -5084,45 +5231,69 @@ var FirebaseNetworkManager = class {
 		});
 		return roomId;
 	}
-	/** Присоединиться к комнате (гость) */
-	async join(roomId, playerName = "Игрок") {
+	async join(roomId, options) {
+		const db = await this.getDb();
+		const { doc, getDoc, setDoc, updateDoc, serverTimestamp } = await __vitePreload(async () => {
+			const { doc, getDoc, setDoc, updateDoc, serverTimestamp } = await import("./firebase-vendor-CM30n8FF.js").then((n) => n.t);
+			return {
+				doc,
+				getDoc,
+				setDoc,
+				updateDoc,
+				serverTimestamp
+			};
+		}, __vite__mapDeps([0,1]));
+		const playerName = options?.playerName ?? "Guest";
 		const playerId = this.generatePlayerId();
-		if (!await roomExists(roomId)) throw new Error("Комната не найдена");
-		const room = await this.getRoomWithPlayers(roomId);
-		const playerIndex = room ? room.playerCount : 0;
-		if (!await joinRoom(roomId, playerId, `${playerName} ${playerIndex + 1}`, playerIndex)) throw new Error("Не удалось присоединиться к комнате (возможно, она заполнена или игра уже началась)");
+		const roomRef = doc(db, "game_rooms", roomId);
+		const roomSnap = await getDoc(roomRef);
+		if (!roomSnap.exists()) throw new Error("Room not found");
+		const room = roomSnap.data();
+		if (room.status !== "waiting") throw new Error("Room is not accepting players");
+		if (room.playerCount >= room.maxPlayers) throw new Error("Room is full");
+		const playerIndex = room.playerCount;
+		await setDoc(doc(db, "game_rooms", roomId, "players", playerId), {
+			id: playerId,
+			name: `${playerName} ${playerIndex + 1}`,
+			roomId,
+			index: playerIndex,
+			connected: true,
+			lastSeen: serverTimestamp()
+		});
+		await updateDoc(roomRef, {
+			playerCount: room.playerCount + 1,
+			updatedAt: serverTimestamp()
+		});
 		this._roomId = roomId;
 		this.myId = playerId;
 		this._isHost = false;
-		this.myRole = "guest";
-		this.myPlayerIndex = playerIndex;
-		this.startHeartbeat();
-		this.startSubscriptions();
+		this._role = "guest";
+		this._playerIndex = playerIndex;
+		this.startHeartbeat(db);
+		this.startSubscriptions(db);
 		this._connected = true;
 	}
-	/** Отключиться */
 	disconnect() {
 		this.stopHeartbeat();
 		this.stopSubscriptions();
-		if (this._roomId && this.myId) leaveRoom(this._roomId, this.myId).catch(console.error);
+		if (this._roomId && this.myId) this.leaveRoom().catch(console.error);
 		this._roomId = "";
 		this.myId = "";
 		this._isHost = false;
-		this.myRole = null;
-		this.myPlayerIndex = -1;
+		this._role = null;
+		this._playerIndex = -1;
 		this._connected = false;
 		this._players = [];
 		this.listeners = [];
 	}
-	/** Отправить данные */
 	send(data) {
 		if (!this._connected || !this._roomId) {
 			console.warn("[FirebaseNetwork] Not connected, cannot send");
 			return false;
 		}
 		if (this._isHost && data.type === "full_state") {
-			updateGameState(this._roomId, data.state).catch((e) => {
-				console.error("[FirebaseNet] Failed to update gameState:", e);
+			this.updateGameState(data.state).catch((e) => {
+				console.error("[FirebaseNetwork] Failed to update gameState:", e);
 			});
 			return true;
 		}
@@ -5132,120 +5303,163 @@ var FirebaseNetworkManager = class {
 		}
 		return false;
 	}
-	/** Отправить action (для гостей) */
+	get role() {
+		return this._role;
+	}
+	get connected() {
+		return this._connected;
+	}
+	get roomId() {
+		return this._roomId;
+	}
+	get playerIndex() {
+		return this._playerIndex;
+	}
+	get playerList() {
+		return this._players;
+	}
+	async updateGameState(gameState) {
+		const db = await this.getDb();
+		const { doc, updateDoc, serverTimestamp } = await __vitePreload(async () => {
+			const { doc, updateDoc, serverTimestamp } = await import("./firebase-vendor-CM30n8FF.js").then((n) => n.t);
+			return {
+				doc,
+				updateDoc,
+				serverTimestamp
+			};
+		}, __vite__mapDeps([0,1]));
+		await updateDoc(doc(db, "game_rooms", this._roomId), {
+			gameState,
+			updatedAt: serverTimestamp()
+		});
+	}
 	async sendAction(data) {
-		const { getDb } = await __vitePreload(async () => {
-			const { getDb } = await import("./firebase-3vXzaqtW.js").then((n) => n.n);
-			return { getDb };
-		}, __vite__mapDeps([0,1,2]));
+		const db = await this.getDb();
 		const { doc, setDoc, serverTimestamp } = await __vitePreload(async () => {
-			const { doc, setDoc, serverTimestamp } = await import("./firebase-vendor-BbM1Nia1.js").then((n) => n.t);
+			const { doc, setDoc, serverTimestamp } = await import("./firebase-vendor-CM30n8FF.js").then((n) => n.t);
 			return {
 				doc,
 				setDoc,
 				serverTimestamp
 			};
-		}, __vite__mapDeps([2,1]));
-		await setDoc(doc(getDb(), "durak_rooms", this._roomId, "actions", `${Date.now()}_${this.myId}`), {
+		}, __vite__mapDeps([0,1]));
+		await setDoc(doc(db, "game_rooms", this._roomId, "actions", `${Date.now()}_${this.myId}`), {
 			...data,
 			playerId: this.myId,
-			playerIndex: this.myPlayerIndex,
+			playerIndex: this._playerIndex,
 			timestamp: serverTimestamp()
 		});
 	}
-	startSubscriptions() {
-		this.unsubscribeRoom = subscribeRoom(this._roomId, (room) => {
-			if (!room) {
-				this.emit({ type: "disconnected" });
-				return;
-			}
-			if (!this._isHost && room.gameState) this.emit({
-				type: "data",
-				payload: {
-					type: "full_state",
-					state: room.gameState,
-					myPlayerIndex: this.myPlayerIndex
-				}
-			});
-			if (room.status === "playing" && !this._connected) this._connected = true;
+	async leaveRoom() {
+		const db = await this.getDb();
+		const { doc, deleteDoc, getDoc, updateDoc, serverTimestamp } = await __vitePreload(async () => {
+			const { doc, deleteDoc, getDoc, updateDoc, serverTimestamp } = await import("./firebase-vendor-CM30n8FF.js").then((n) => n.t);
+			return {
+				doc,
+				deleteDoc,
+				getDoc,
+				updateDoc,
+				serverTimestamp
+			};
+		}, __vite__mapDeps([0,1]));
+		await deleteDoc(doc(db, "game_rooms", this._roomId, "players", this.myId));
+		const roomRef = doc(db, "game_rooms", this._roomId);
+		const roomSnap = await getDoc(roomRef);
+		if (!roomSnap.exists()) return;
+		const room = roomSnap.data();
+		const newCount = Math.max(0, room.playerCount - 1);
+		if (newCount === 0) await deleteDoc(roomRef);
+		else await updateDoc(roomRef, {
+			playerCount: newCount,
+			updatedAt: serverTimestamp()
 		});
-		this.unsubscribePlayers = subscribePlayers(this._roomId, (players) => {
-			this._players = players;
-		});
-		if (this._isHost) this.startActionListener();
 	}
-	stopSubscriptions() {
-		if (this.unsubscribeRoom) {
-			this.unsubscribeRoom();
-			this.unsubscribeRoom = null;
-		}
-		if (this.unsubscribePlayers) {
-			this.unsubscribePlayers();
-			this.unsubscribePlayers = null;
-		}
-		this.stopActionListener();
-	}
-	unsubscribeActions = null;
-	startActionListener() {
+	startSubscriptions(db) {
 		__vitePreload(async () => {
-			const { getDb } = await import("./firebase-3vXzaqtW.js").then((n) => n.n);
-			return { getDb };
-		}, __vite__mapDeps([0,1,2])).then(({ getDb }) => {
-			__vitePreload(async () => {
-				const { collection, onSnapshot, deleteDoc, doc, query, orderBy } = await import("./firebase-vendor-BbM1Nia1.js").then((n) => n.t);
-				return {
-					collection,
-					onSnapshot,
-					deleteDoc,
-					doc,
-					query,
-					orderBy
-				};
-			}, __vite__mapDeps([2,1])).then(({ collection, onSnapshot, deleteDoc, doc, query, orderBy }) => {
-				const q = query(collection(getDb(), "durak_rooms", this._roomId, "actions"), orderBy("timestamp"));
-				this.unsubscribeActions = onSnapshot(q, (snap) => {
-					snap.docChanges().forEach((change) => {
-						if (change.type === "added") {
-							const action = change.doc.data();
-							this.emit({
-								type: "data",
-								payload: {
-									type: "action",
-									action
-								}
-							});
-							deleteDoc(doc(getDb(), "durak_rooms", this._roomId, "actions", change.doc.id)).catch(console.error);
-						}
-					});
+			const { doc, onSnapshot, collection } = await import("./firebase-vendor-CM30n8FF.js").then((n) => n.t);
+			return {
+				doc,
+				onSnapshot,
+				collection
+			};
+		}, __vite__mapDeps([0,1])).then(({ doc, onSnapshot, collection }) => {
+			this.unsubscribeRoom = onSnapshot(doc(db, "game_rooms", this._roomId), (snap) => {
+				if (!snap.exists()) {
+					this.emit({ type: "disconnected" });
+					return;
+				}
+				const room = snap.data();
+				if (!this._isHost && room.gameState) this.emit({
+					type: "data",
+					payload: {
+						type: "full_state",
+						state: room.gameState,
+						myPlayerIndex: this._playerIndex
+					}
+				});
+			});
+			this.unsubscribePlayers = onSnapshot(collection(db, "game_rooms", this._roomId, "players"), (snap) => {
+				this._players = [];
+				snap.forEach((d) => {
+					this._players.push(d.data());
+				});
+			});
+			if (this._isHost) this.startActionListener(db);
+		});
+	}
+	startActionListener(db) {
+		__vitePreload(async () => {
+			const { collection, onSnapshot, deleteDoc, doc, query, orderBy } = await import("./firebase-vendor-CM30n8FF.js").then((n) => n.t);
+			return {
+				collection,
+				onSnapshot,
+				deleteDoc,
+				doc,
+				query,
+				orderBy
+			};
+		}, __vite__mapDeps([0,1])).then(({ collection, onSnapshot, deleteDoc, doc, query, orderBy }) => {
+			const q = query(collection(db, "game_rooms", this._roomId, "actions"), orderBy("timestamp"));
+			this.unsubscribeActions = onSnapshot(q, (snap) => {
+				snap.docChanges().forEach((change) => {
+					if (change.type === "added") {
+						const action = change.doc.data();
+						this.emit({
+							type: "data",
+							payload: {
+								type: "action",
+								action
+							}
+						});
+						deleteDoc(doc(db, "game_rooms", this._roomId, "actions", change.doc.id)).catch(() => {});
+					}
 				});
 			});
 		});
 	}
-	stopActionListener() {
-		if (this.unsubscribeActions) {
-			this.unsubscribeActions();
-			this.unsubscribeActions = null;
-		}
+	stopSubscriptions() {
+		this.unsubscribeRoom?.();
+		this.unsubscribeRoom = null;
+		this.unsubscribePlayers?.();
+		this.unsubscribePlayers = null;
+		this.unsubscribeActions?.();
+		this.unsubscribeActions = null;
 	}
-	startHeartbeat() {
+	startHeartbeat(db) {
 		this.heartbeatInterval = setInterval(() => {
 			if (!this._roomId || !this.myId) return;
 			__vitePreload(async () => {
-				const { getPlayerRef } = await import("./firebase-3vXzaqtW.js").then((n) => n.n);
-				return { getPlayerRef };
-			}, __vite__mapDeps([0,1,2])).then(({ getPlayerRef }) => {
-				__vitePreload(async () => {
-					const { updateDoc, serverTimestamp } = await import("./firebase-vendor-BbM1Nia1.js").then((n) => n.t);
-					return {
-						updateDoc,
-						serverTimestamp
-					};
-				}, __vite__mapDeps([2,1])).then(({ updateDoc, serverTimestamp }) => {
-					updateDoc(getPlayerRef(this._roomId, this.myId), {
-						lastSeen: serverTimestamp(),
-						connected: true
-					}).catch(() => {});
-				});
+				const { doc, updateDoc, serverTimestamp } = await import("./firebase-vendor-CM30n8FF.js").then((n) => n.t);
+				return {
+					doc,
+					updateDoc,
+					serverTimestamp
+				};
+			}, __vite__mapDeps([0,1])).then(({ doc, updateDoc, serverTimestamp }) => {
+				updateDoc(doc(db, "game_rooms", this._roomId, "players", this.myId), {
+					lastSeen: serverTimestamp(),
+					connected: true
+				}).catch(() => {});
 			});
 		}, 1e4);
 	}
@@ -5255,70 +5469,25 @@ var FirebaseNetworkManager = class {
 			this.heartbeatInterval = null;
 		}
 	}
-	async registerAsPlayer(roomId, playerId, name, index) {
-		const { getPlayerRef } = await __vitePreload(async () => {
-			const { getPlayerRef } = await import("./firebase-3vXzaqtW.js").then((n) => n.n);
-			return { getPlayerRef };
-		}, __vite__mapDeps([0,1,2]));
-		const { setDoc, serverTimestamp } = await __vitePreload(async () => {
-			const { setDoc, serverTimestamp } = await import("./firebase-vendor-BbM1Nia1.js").then((n) => n.t);
-			return {
-				setDoc,
-				serverTimestamp
-			};
-		}, __vite__mapDeps([2,1]));
-		await setDoc(getPlayerRef(roomId, playerId), {
-			id: playerId,
-			name,
-			roomId,
-			index,
-			connected: true,
-			lastSeen: serverTimestamp()
-		});
-	}
-	async getRoomWithPlayers(roomId) {
-		const { getRoom } = await __vitePreload(async () => {
-			const { getRoom } = await import("./firebase-3vXzaqtW.js").then((n) => n.n);
-			return { getRoom };
-		}, __vite__mapDeps([0,1,2]));
-		return getRoom(roomId);
-	}
 	generateRoomId() {
 		return Math.random().toString(36).substring(2, 8).toUpperCase();
 	}
 	generatePlayerId() {
 		return `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 	}
-	get role() {
-		return this.myRole;
-	}
-	get roomId() {
-		return this._roomId;
-	}
-	get id() {
-		return this.myId;
-	}
-	get playerIndex() {
-		return this.myPlayerIndex;
-	}
-	get isConnected() {
-		return this._connected;
-	}
-	get playerList() {
-		return this._players;
-	}
 };
 //#endregion
 //#region src/engine/netStore.ts
 /**
 * Zustand store для сетевой игры «Дурак»
-* Универсальный — поддержка PeerJS и Firebase
+* Обёртка над game-network-lib (PeerJS + Firebase)
 * Хост авторитетен, гости отправляют actions
 * Поддержка 2-6 игроков
 */
 var unsubscribeGameStore = null;
 var useNetStore = create((set, get) => ({
 	network: null,
+	gameNet: null,
 	backend: "peerjs",
 	role: null,
 	myPlayerIndex: -1,
@@ -5327,82 +5496,81 @@ var useNetStore = create((set, get) => ({
 	error: null,
 	roomId: null,
 	players: [],
-	initHost: (network, backend) => {
-		const myPlayerIndex = 0;
-		network.onData((data) => {
-			const msg = data;
-			if (msg.type === "action" && msg.action) {
-				const playerIndex = msg.playerIndex ?? msg.action.playerIndex;
-				executeAction({
-					...msg.action.action ?? msg.action,
-					playerIndex
-				});
+	initHost: async (network, backend) => {
+		const gameNet = new GameNetwork({
+			backend,
+			onAction: (action) => {
+				executeAction(action);
+			},
+			onConnectionChange: (connected) => {
+				if (!connected) set({ connected: false });
+			},
+			onError: (error) => {
+				set({ error });
 			}
 		});
-		network.on((event) => {
-			if (event.type === "disconnected") set({ connected: false });
-			if (event.type === "error") set({ error: String(event.payload?.message || event.payload || "Network error") });
-		});
+		const roomId = await gameNet.initHost(network);
 		set({
 			network,
+			gameNet,
 			backend,
 			role: "host",
-			myPlayerIndex,
+			myPlayerIndex: 0,
 			connected: true,
 			error: null,
-			roomId: "roomId" in network ? network.roomId : null
+			roomId
 		});
-		broadcastState(network);
+		broadcastState(gameNet);
 		setTimeout(() => {
 			unsubscribeGameStore = useGameStore.subscribe((state) => {
-				broadcastState(network, state);
+				broadcastState(gameNet, serializeGameState(state));
 			});
 		}, 0);
+		return roomId;
 	},
-	initGuest: (network, backend) => {
-		const guestPlayerIndex = "playerIndex" in network ? network.playerIndex : 1;
+	initGuest: async (network, backend, playerIndex) => {
+		const gameNet = new GameNetwork({
+			backend,
+			onState: (state, myPlayerIndex) => {
+				set({
+					gameState: state,
+					myPlayerIndex
+				});
+			},
+			onConnectionChange: (connected) => {
+				if (!connected) set({ connected: false });
+			},
+			onError: (error) => {
+				set({ error });
+			}
+		});
+		await gameNet.initGuest(network, playerIndex);
 		set({
 			network,
+			gameNet,
 			backend,
 			role: "guest",
-			myPlayerIndex: guestPlayerIndex,
+			myPlayerIndex: playerIndex ?? ("playerIndex" in network ? network.playerIndex : 1),
 			connected: true,
 			error: null,
 			roomId: "roomId" in network ? network.roomId : null
-		});
-		network.onData((data) => {
-			const msg = data;
-			if (msg.type === "full_state" && msg.state) set({
-				gameState: msg.state,
-				myPlayerIndex: msg.myPlayerIndex ?? guestPlayerIndex
-			});
-		});
-		network.on((event) => {
-			if (event.type === "disconnected") set({ connected: false });
-			if (event.type === "error") set({ error: String(event.payload?.message || event.payload || "Network error") });
 		});
 	},
 	sendAction: (action) => {
-		const { network, backend } = get();
-		if (!network) return;
-		if (backend === "firebase") network.send({
-			type: "action",
-			action
-		});
-		else network.send({
-			type: "action",
-			action
-		});
+		const { gameNet } = get();
+		if (!gameNet) return;
+		gameNet.sendAction(action);
 	},
 	disconnect: () => {
 		if (unsubscribeGameStore) {
 			unsubscribeGameStore();
 			unsubscribeGameStore = null;
 		}
-		const { network } = get();
-		if (network) network.disconnect();
+		const { gameNet } = get();
+		if (gameNet) gameNet.disconnect();
 		set({
 			network: null,
+			gameNet: null,
 			backend: "peerjs",
 			role: null,
 			myPlayerIndex: -1,
@@ -5464,14 +5632,9 @@ function serializeGameState(store) {
 	};
 }
 /** Рассылка состояния гостям. Карты других игроков скрываются. */
-function broadcastState(network, state) {
-	const raw = state ?? useGameStore.getState();
-	const s = "validDefends" in raw ? serializeGameState(raw) : raw;
-	if (network instanceof FirebaseNetworkManager) network.send({
-		type: "full_state",
-		state: s
-	});
-	else {
+function broadcastState(gameNet, state) {
+	const s = state ?? serializeGameState(useGameStore.getState());
+	if (gameNet.status.backend === "peerjs") {
 		const guestState = {
 			...s,
 			players: s.players.map((p, i) => i === 0 ? {
@@ -5479,12 +5642,8 @@ function broadcastState(network, state) {
 				hand: []
 			} : p)
 		};
-		network.send({
-			type: "full_state",
-			state: guestState,
-			myPlayerIndex: 1
-		});
-	}
+		gameNet.broadcastState(guestState);
+	} else gameNet.broadcastState(s);
 }
 //#endregion
 //#region src/components/CardComponent.tsx
@@ -5871,10 +6030,21 @@ function applyVKTheme(theme) {
 * - VK Friends API для списка друзей
 * - VK Bridge для уведомлений
 */
+var VK_FIREBASE_CONFIG = {
+	apiKey: "AIzaSyA9dgeYI_Axx5gqgPacoBf_HGPncwT8qoU",
+	authDomain: "game-card-durak.firebaseapp.com",
+	projectId: "game-card-durak",
+	storageBucket: "game-card-durak.firebasestorage.app",
+	messagingSenderId: "872670434332",
+	appId: "1:872670434332:web:a59d4438fffb0e6c85bbd9"
+};
 var VKNetworkManager = class extends FirebaseNetworkManager {
+	constructor() {
+		super(VK_FIREBASE_CONFIG);
+	}
 	/** Создать комнату с VK-приглашением */
 	async hostWithVKInvite(maxPlayers = 2) {
-		const roomId = await this.host(maxPlayers);
+		const roomId = await this.host({ maxPlayers });
 		if (isVKEnvironment()) try {
 			await src_bridge.send("VKWebAppShare", { link: `https://vk.com/app{APP_ID}#room=${roomId}` });
 		} catch (e) {
@@ -5888,7 +6058,7 @@ var VKNetworkManager = class extends FirebaseNetworkManager {
 		const urlParams = new URLSearchParams(window.location.search);
 		const roomId = urlParams.get("room") || urlParams.get("vk_room");
 		if (!roomId) throw new Error("Не найден код комнаты в параметрах VK");
-		await this.join(roomId, playerName);
+		await this.join(roomId, { playerName });
 	}
 	/** Получить список друзей VK (если разрешено) */
 	async getVKFriends() {
@@ -5940,7 +6110,14 @@ function NetworkScreen({ onConnected, onBack }) {
 		setError("");
 		try {
 			if (provider === "firebase") {
-				const network = new FirebaseNetworkManager();
+				const network = new FirebaseNetworkManager({
+					apiKey: "AIzaSyA9dgeYI_Axx5gqgPacoBf_HGPncwT8qoU",
+					authDomain: "game-card-durak.firebaseapp.com",
+					projectId: "game-card-durak",
+					storageBucket: "game-card-durak.firebasestorage.app",
+					messagingSenderId: "872670434332",
+					appId: "1:872670434332:web:a59d4438fffb0e6c85bbd9"
+				});
 				networkRef.current = network;
 				network.on((event) => {
 					if (event.type === "connected" && network.role === "host") {
@@ -5953,7 +6130,7 @@ function NetworkScreen({ onConnected, onBack }) {
 						setStatus("");
 					}
 				});
-				const id = await network.host(playerCount);
+				const id = await network.host({ maxPlayers: playerCount });
 				setGeneratedRoomId(id);
 				setStatus(`Комната ${id} создана! Ожидание игроков...`);
 				const checkInterval = setInterval(() => {
@@ -5988,7 +6165,11 @@ function NetworkScreen({ onConnected, onBack }) {
 					}
 				}, 1e3);
 			} else {
-				const network = new NetworkManager();
+				const network = new PeerJSNetworkManager({
+					host: typeof window !== "undefined" ? window.location.hostname : "localhost",
+					port: 9e3,
+					path: "/myapp"
+				});
 				networkRef.current = network;
 				network.on((event) => {
 					if (event.type === "connected" && network.role === "host") {
@@ -6018,7 +6199,14 @@ function NetworkScreen({ onConnected, onBack }) {
 		setError("");
 		try {
 			if (provider === "firebase" || provider === "vk") {
-				const network = provider === "vk" ? new VKNetworkManager() : new FirebaseNetworkManager();
+				const network = provider === "vk" ? new VKNetworkManager() : new FirebaseNetworkManager(provider === "vk" ? void 0 : {
+					apiKey: "AIzaSyA9dgeYI_Axx5gqgPacoBf_HGPncwT8qoU",
+					authDomain: "game-card-durak.firebaseapp.com",
+					projectId: "game-card-durak",
+					storageBucket: "game-card-durak.firebasestorage.app",
+					messagingSenderId: "872670434332",
+					appId: "1:872670434332:web:a59d4438fffb0e6c85bbd9"
+				});
 				networkRef.current = network;
 				network.on((event) => {
 					if (event.type === "error") {
@@ -6030,7 +6218,11 @@ function NetworkScreen({ onConnected, onBack }) {
 				setStatus("Подключено! Начинаем...");
 				onConnected(network, "guest", "firebase");
 			} else {
-				const network = new NetworkManager();
+				const network = new PeerJSNetworkManager({
+					host: typeof window !== "undefined" ? window.location.hostname : "localhost",
+					port: 9e3,
+					path: "/myapp"
+				});
 				networkRef.current = network;
 				network.on((event) => {
 					if (event.type === "error") {
