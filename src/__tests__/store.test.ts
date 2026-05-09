@@ -45,8 +45,7 @@ describe('startGame', () => {
 
   it('атакующий — игрок с младшим козырем', () => {
     const s = startAndSnapshot();
-    const attacker = s.players[s.attackerIndex];
-    const hasTrumpInHand = attacker.hand.some(c => c.suit === s.trumpSuit);
+    // hasTrumpInHand removed (unused)
     // У атакующего должен быть козырь в руке (иначе он бы не стал атакующим)
     // Если у обоих нет козырей — атакует игрок 0
     const allHands = s.players.map(p => p.hand.filter(c => c.suit === s.trumpSuit));
@@ -107,7 +106,7 @@ describe('attack', () => {
   });
 
   it('нельзя атаковать картой не из своей руки', () => {
-    const s = startAndSnapshot();
+    startAndSnapshot();
     const fakeCard = { suit: 'hearts' as const, rank: 14 as const, id: 'fake' };
     useGameStore.getState().attack(fakeCard);
     expect(snap().table).toHaveLength(0);
@@ -204,7 +203,6 @@ describe('defend', () => {
 describe('take (взять)', () => {
   it('защитник берёт карты', () => {
     let s = startAndSnapshot();
-    const attackerHandSize = s.players[s.attackerIndex].hand.length;
     useGameStore.getState().attack(s.players[s.attackerIndex].hand[0]);
     s = snap();
 
@@ -231,8 +229,6 @@ describe('take (взять)', () => {
     let s = startAndSnapshot();
     useGameStore.getState().attack(s.players[s.attackerIndex].hand[0]);
     s = snap();
-    const defenderHandBefore = s.players[s.defenderIndex].hand.length;
-
     useGameStore.getState().take();
     s = snap();
 
@@ -419,7 +415,7 @@ describe('validDefends', () => {
   });
 
   it('возвращает пустой массив до атаки', () => {
-    const s = startAndSnapshot();
+    startAndSnapshot();
     // Нет карт на столе — нет защиты
     expect(useGameStore.getState().validDefends('any')).toHaveLength(0);
   });

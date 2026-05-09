@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   createDeck, shuffle, cardPower, canBeat, sortHand, cardsNeeded,
   getNextPlayerIndex, getPrevPlayerIndex, SUITS, RANKS, SUIT_SYMBOLS,
-  RANK_NAMES, SUIT_COLORS, SUIT_NAMES, cardToString
+  RANK_NAMES, SUIT_COLORS, cardToString
 } from '../engine/cards';
+import type { Suit, Rank, Card } from '../engine/types';
 
 describe('createDeck', () => {
   it('создаёт колоду из 36 карт', () => {
@@ -57,23 +58,23 @@ describe('shuffle', () => {
 describe('cardPower', () => {
   it('козырь сильнее любого некозыря', () => {
     const trump: Suit = 'spades';
-    const trump6 = { suit: 'spades', rank: 6, id: 'spades-6' };
-    const aceHearts = { suit: 'hearts', rank: 14, id: 'hearts-14' };
+    const trump6: Card = { suit: 'spades', rank: 6, id: 'spades-6' };
+    const aceHearts: Card = { suit: 'hearts', rank: 14, id: 'hearts-14' };
     expect(cardPower(trump6, trump)).toBeGreaterThan(cardPower(aceHearts, trump));
   });
 
   it('некозыри одной масти сравниваются по рангу', () => {
     const trump: Suit = 'spades';
-    const card1 = { suit: 'hearts', rank: 10, id: 'hearts-10' };
-    const card2 = { suit: 'hearts', rank: 14, id: 'hearts-14' };
+    const card1: Card = { suit: 'hearts', rank: 10, id: 'hearts-10' };
+    const card2: Card = { suit: 'hearts', rank: 14, id: 'hearts-14' };
     expect(cardPower(card2, trump)).toBeGreaterThan(cardPower(card1, trump));
   });
 
   it('козырь получает бонус +100 к силе', () => {
     const trump: Suit = 'hearts';
-    const card = { suit: 'hearts', rank: 7, id: 'hearts-7' };
+    const card: Card = { suit: 'hearts', rank: 7, id: 'hearts-7' };
     expect(cardPower(card, trump)).toBe(107);
-    expect(cardPower(card, 'spades')).toBe(7);
+    expect(cardPower(card, 'spades' as Suit)).toBe(7);
   });
 });
 
@@ -81,32 +82,32 @@ describe('canBeat', () => {
   const trump: Suit = 'hearts';
 
   it('карта той же масти с большим рангом бьёт', () => {
-    const attack = { suit: 'hearts', rank: 6, id: 'hearts-6' };
-    const defend = { suit: 'hearts', rank: 10, id: 'hearts-10' };
+    const attack: Card = { suit: 'hearts', rank: 6, id: 'hearts-6' };
+    const defend: Card = { suit: 'hearts', rank: 10, id: 'hearts-10' };
     expect(canBeat(attack, defend, trump)).toBe(true);
   });
 
   it('карта той же масти с меньшим рангом не бьёт', () => {
-    const attack = { suit: 'hearts', rank: 10, id: 'hearts-10' };
-    const defend = { suit: 'hearts', rank: 6, id: 'hearts-6' };
+    const attack: Card = { suit: 'hearts', rank: 10, id: 'hearts-10' };
+    const defend: Card = { suit: 'hearts', rank: 6, id: 'hearts-6' };
     expect(canBeat(attack, defend, trump)).toBe(false);
   });
 
   it('козырь бьёт некозырную карту', () => {
-    const attack = { suit: 'spades', rank: 14, id: 'spades-14' };
-    const defend = { suit: 'hearts', rank: 6, id: 'hearts-6' };
+    const attack: Card = { suit: 'spades', rank: 14, id: 'spades-14' };
+    const defend: Card = { suit: 'hearts', rank: 6, id: 'hearts-6' };
     expect(canBeat(attack, defend, trump)).toBe(true);
   });
 
   it('некозырная другая масть не бьёт', () => {
-    const attack = { suit: 'spades', rank: 6, id: 'spades-6' };
-    const defend = { suit: 'clubs', rank: 14, id: 'clubs-14' };
+    const attack: Card = { suit: 'spades', rank: 6, id: 'spades-6' };
+    const defend: Card = { suit: 'clubs', rank: 14, id: 'clubs-14' };
     expect(canBeat(attack, defend, trump)).toBe(false);
   });
 
   it('равный ранг той же масти не бьёт', () => {
-    const attack = { suit: 'hearts', rank: 10, id: 'hearts-10' };
-    const defend = { suit: 'hearts', rank: 10, id: 'hearts-10' };
+    const attack: Card = { suit: 'hearts', rank: 10, id: 'hearts-10' };
+    const defend: Card = { suit: 'hearts', rank: 10, id: 'hearts-10' };
     expect(canBeat(attack, defend, trump)).toBe(false);
   });
 });
@@ -115,7 +116,7 @@ describe('sortHand', () => {
   const trump: Suit = 'hearts';
 
   it('козыри идут после некозырей', () => {
-    const hand = [
+    const hand: Card[] = [
       { suit: 'hearts', rank: 14, id: 'hearts-14' },
       { suit: 'clubs', rank: 6, id: 'clubs-6' },
     ];
@@ -125,7 +126,7 @@ describe('sortHand', () => {
   });
 
   it('карты одной масти сортируются по рангу', () => {
-    const hand = [
+    const hand: Card[] = [
       { suit: 'clubs', rank: 14, id: 'clubs-14' },
       { suit: 'clubs', rank: 6, id: 'clubs-6' },
     ];
@@ -135,7 +136,7 @@ describe('sortHand', () => {
   });
 
   it('не модифицирует исходный массив', () => {
-    const hand = [
+    const hand: Card[] = [
       { suit: 'hearts', rank: 14, id: 'hearts-14' },
       { suit: 'clubs', rank: 6, id: 'clubs-6' },
     ];
@@ -148,7 +149,7 @@ describe('sortHand', () => {
 describe('cardsNeeded', () => {
   it('возвращает 6 минус размер руки', () => {
     expect(cardsNeeded([])).toBe(6);
-    expect(cardsNeeded([{ suit: 'hearts', rank: 6, id: 'hearts-6' }])).toBe(5);
+    expect(cardsNeeded([{ suit: 'hearts' as Suit, rank: 6 as Rank, id: 'hearts-6' }])).toBe(5);
   });
 
   it('возвращает 0 если в руке 6+ карт', () => {
@@ -218,11 +219,11 @@ describe('константы', () => {
 
 describe('cardToString', () => {
   it('формат: Ранг+Масть', () => {
-    expect(cardToString({ suit: 'hearts', rank: 14, id: 'hearts-14' })).toBe('Т♥');
-    expect(cardToString({ suit: 'spades', rank: 11, id: 'spades-11' })).toBe('В♠');
+    expect(cardToString({ suit: 'hearts', rank: 14, id: 'hearts-14' } as Card)).toBe('Т♥');
+    expect(cardToString({ suit: 'spades', rank: 11, id: 'spades-11' } as Card)).toBe('В♠');
   });
 
   it('десятка отображается как 10', () => {
-    expect(cardToString({ suit: 'clubs', rank: 10, id: 'clubs-10' })).toBe('10♣');
+    expect(cardToString({ suit: 'clubs', rank: 10, id: 'clubs-10' } as Card)).toBe('10♣');
   });
 });
