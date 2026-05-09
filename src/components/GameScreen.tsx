@@ -508,6 +508,18 @@ export function GameScreen() {
       {lastAction && (
         <div className="text-center text-green-200/70 text-xs py-1 bg-black/20">{lastAction}</div>
       )}
+
+      {/* Overlay: хост отключился */}
+      {isNetworkMode && !netStore.connected && netStore.role === 'guest' && (
+        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-4 z-50">
+          <div className="text-6xl">😱</div>
+          <h2 className="text-2xl font-bold text-red-400">Хост отключился</h2>
+          <p className="text-green-200 text-sm">Соединение с хостом разорвано</p>
+          <button onClick={() => { netStore.disconnect(); store.resetGame(); }} className="btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-2">
+            🔄 В меню
+          </button>
+        </div>
+      )}
     </div>
   );
 
