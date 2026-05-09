@@ -818,6 +818,258 @@ function checkGameOver(players, deck) {
 	};
 }
 //#endregion
+//#region src/engine/netStore.ts
+/**
+* Zustand store для сетевой игры «Дурак»
+* Хост авторитетен, гости отправляют actions
+* Поддержка 2-6 игроков (PeerJS + Firebase)
+*/
+var unsubscribeGameStore = null;
+var useNetStore = create((set, get) => ({
+	network: null,
+	backend: "peerjs",
+	role: null,
+	myPlayerIndex: -1,
+	gameState: null,
+	connected: false,
+	error: null,
+	roomId: null,
+	players: [],
+	initHost: (network, backend) => {
+		const roomId = "roomId" in network ? network.roomId : null;
+		network.onData((data) => {
+			const msg = data;
+			if (msg.type === "action" && msg.action) {
+				const playerIndex = msg.playerIndex ?? msg.action.playerIndex ?? -1;
+				executeAction({
+					...msg.action.action ?? msg.action,
+					playerIndex
+				});
+			}
+		});
+		network.on((event) => {
+			if (event.type === "disconnected") set({ connected: false });
+			if (event.type === "error") set({ error: String(event.payload?.message ?? event.payload ?? "Ошибка") });
+		});
+		set({
+			network,
+			backend,
+			role: "host",
+			myPlayerIndex: 0,
+			connected: true,
+			error: null,
+			roomId
+		});
+		broadcastState(network, backend);
+		setTimeout(() => {
+			unsubscribeGameStore = useGameStore.subscribe((state) => {
+				broadcastState(network, backend, serializeGameState(state));
+			});
+		}, 0);
+	},
+	initGuest: (network, backend, playerIndex) => {
+		const guestPlayerIndex = playerIndex ?? ("playerIndex" in network ? network.playerIndex : 1);
+		const roomId = "roomId" in network ? network.roomId : null;
+		network.onData((data) => {
+			const msg = data;
+			if (msg.type === "full_state" && msg.state) {
+				const idx = msg.myPlayerIndex ?? guestPlayerIndex;
+				set({
+					gameState: msg.state,
+					myPlayerIndex: idx
+				});
+			}
+		});
+		network.on((event) => {
+			if (event.type === "disconnected") set({ connected: false });
+			if (event.type === "error") set({ error: String(event.payload?.message ?? event.payload ?? "Ошибка") });
+		});
+		set({
+			network,
+			backend,
+			role: "guest",
+			myPlayerIndex: guestPlayerIndex,
+			connected: true,
+			error: null,
+			roomId
+		});
+	},
+	sendAction: (action) => {
+		const { network } = get();
+		if (!network) return;
+		network.send({
+			type: "action",
+			action
+		});
+	},
+	disconnect: () => {
+		if (unsubscribeGameStore) {
+			unsubscribeGameStore();
+			unsubscribeGameStore = null;
+		}
+		const { network } = get();
+		if (network) network.disconnect();
+		set({
+			network: null,
+			backend: "peerjs",
+			role: null,
+			myPlayerIndex: -1,
+			gameState: null,
+			connected: false,
+			error: null,
+			roomId: null,
+			players: []
+		});
+	}
+}));
+/** Хост выполняет действие гостя через gameStore */
+function executeAction(action) {
+	const store = useGameStore.getState();
+	switch (action.type) {
+		case "attack": {
+			const playerIdx = action.playerIndex ?? store.activePlayerIndex ?? 0;
+			const card = store.players[playerIdx]?.hand.find((c) => c.id === action.cardId);
+			if (card) {
+				if (store.activePlayerIndex !== playerIdx) useGameStore.setState({ activePlayerIndex: playerIdx });
+				store.attack(card);
+			}
+			break;
+		}
+		case "defend": {
+			const defenderIdx = action.playerIndex ?? store.defenderIndex ?? 1;
+			const defendCard = store.players[defenderIdx]?.hand.find((c) => c.id === action.defendCardId);
+			if (defendCard) store.defend(action.attackCardId, defendCard);
+			break;
+		}
+		case "take":
+			store.take();
+			break;
+		case "pass":
+			store.pass();
+			break;
+	}
+}
+/** Извлечь сериализуемое GameState из Zustand store (без функций) */
+function serializeGameState(store) {
+	return {
+		deck: store.deck,
+		trumpSuit: store.trumpSuit,
+		trumpCard: store.trumpCard,
+		players: store.players,
+		attackerIndex: store.attackerIndex,
+		defenderIndex: store.defenderIndex,
+		activePlayerIndex: store.activePlayerIndex,
+		playerCount: store.playerCount,
+		table: store.table,
+		phase: store.phase,
+		discardPile: store.discardPile,
+		consecutivePasses: store.consecutivePasses,
+		thrownInPasses: store.thrownInPasses,
+		winner: store.winner,
+		lastAction: store.lastAction,
+		gameMode: store.gameMode,
+		roundCount: store.roundCount
+	};
+}
+/** Рассылка состояния гостям. Карты других игроков скрываются. */
+function broadcastState(network, backend, state) {
+	const s = state ?? serializeGameState(useGameStore.getState());
+	if (backend === "peerjs") {
+		const guestState = {
+			...s,
+			players: s.players.map((p, i) => i === 0 ? {
+				...p,
+				hand: []
+			} : p)
+		};
+		network.send({
+			type: "full_state",
+			state: guestState
+		});
+	} else network.send({
+		type: "full_state",
+		state: s
+	});
+}
+//#endregion
+//#region src/components/CardComponent.tsx
+var import_jsx_runtime = require_jsx_runtime();
+/** Ранг: краткое имя для углов и полное для центра */
+function rankDisplay(rank) {
+	switch (rank) {
+		case 11: return {
+			short: "В",
+			full: "Valet"
+		};
+		case 12: return {
+			short: "Д",
+			full: "Queen"
+		};
+		case 13: return {
+			short: "К",
+			full: "King"
+		};
+		case 14: return {
+			short: "Т",
+			full: "Ace"
+		};
+		default: return {
+			short: String(rank),
+			full: String(rank)
+		};
+	}
+}
+function CardComponent({ card, trumpSuit, onClick, selected, disabled, faceDown, className = "", animating }) {
+	if (faceDown) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: `card-back ${className}` });
+	const color = SUIT_COLORS[card.suit];
+	const isTrump = trumpSuit && card.suit === trumpSuit;
+	const symbol = SUIT_SYMBOLS[card.suit];
+	const { short, full } = rankDisplay(card.rank);
+	const isFaceCard = card.rank >= 11;
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: `playing-card ${color === "red" ? "card-red" : "card-black"} ${selected ? "selected" : ""} ${isTrump ? "trump-card" : ""} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${animating === "play" ? "card-play-anim" : animating === "take" ? "card-take-anim" : animating === "discard" ? "card-discard-anim" : ""} ${className}`,
+		onClick: disabled ? void 0 : onClick,
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: `card-corner top-left ${color === "red" ? "text-red-600" : "text-gray-800"}`,
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+					className: "card-rank",
+					children: short
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+					className: "card-suit-small",
+					children: symbol
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: `card-center ${color === "red" ? "text-red-600" : "text-gray-800"}`,
+				children: isFaceCard ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "card-face",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "card-face-symbol",
+						children: symbol
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "card-face-label",
+						children: full
+					})]
+				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+					className: "card-big-suit",
+					children: symbol
+				})
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: `card-corner bottom-right ${color === "red" ? "text-red-600" : "text-gray-800"}`,
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+					className: "card-rank",
+					children: short
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+					className: "card-suit-small",
+					children: symbol
+				})]
+			})
+		]
+	});
+}
+//#endregion
 //#region node_modules/peerjs-js-binarypack/dist/binarypack.mjs
 var $e8379818650e2442$export$93654d4f2d6cd524 = class {
 	constructor() {
@@ -4860,122 +5112,6 @@ var __vitePreload = function preload(baseModule, deps, importerUrl) {
 };
 //#endregion
 //#region node_modules/game-network-lib/dist/index.mjs
-var GameNetwork = class {
-	constructor(config) {
-		this.network = null;
-		this.config = config;
-		this._status = {
-			backend: config.backend,
-			role: null,
-			myPlayerIndex: -1,
-			connected: false,
-			error: null,
-			roomId: null
-		};
-	}
-	get status() {
-		return { ...this._status };
-	}
-	/** Initialize as host */
-	async initHost(network) {
-		this.network = network;
-		const roomId = await network.host();
-		network.onData((data) => {
-			const msg = data;
-			if (msg.type === "action" && msg.action) {
-				const playerIndex = msg.playerIndex ?? msg.action.playerIndex ?? -1;
-				const innerAction = msg.action.action ?? msg.action;
-				this.config.onAction?.({
-					...innerAction,
-					playerIndex
-				});
-			}
-		});
-		network.on((event) => {
-			if (event.type === "disconnected") {
-				this._status.connected = false;
-				this.config.onConnectionChange?.(false, this._status.role);
-			}
-			if (event.type === "error") {
-				this._status.error = String(event.payload ?? "Network error");
-				this.config.onError?.(this._status.error);
-			}
-		});
-		this._status = {
-			...this._status,
-			role: "host",
-			myPlayerIndex: 0,
-			connected: true,
-			error: null,
-			roomId
-		};
-		this.config.onConnectionChange?.(true, "host");
-		return roomId;
-	}
-	/** Initialize as guest */
-	async initGuest(network, playerIndex) {
-		this.network = network;
-		await network.join("");
-		const myIndex = playerIndex ?? 1;
-		network.onData((data) => {
-			const msg = data;
-			if (msg.type === "full_state" && msg.state) {
-				const idx = msg.myPlayerIndex ?? myIndex;
-				this._status.myPlayerIndex = idx;
-				this.config.onState?.(msg.state, idx);
-			}
-		});
-		network.on((event) => {
-			if (event.type === "disconnected") {
-				this._status.connected = false;
-				this.config.onConnectionChange?.(false, this._status.role);
-			}
-			if (event.type === "error") {
-				this._status.error = String(event.payload ?? "Network error");
-				this.config.onError?.(this._status.error);
-			}
-		});
-		this._status = {
-			...this._status,
-			role: "guest",
-			myPlayerIndex: myIndex,
-			connected: true,
-			error: null,
-			roomId: "roomId" in network ? network.roomId : null
-		};
-		this.config.onConnectionChange?.(true, "guest");
-	}
-	/** Send an action (guest → host) */
-	sendAction(action) {
-		if (!this.network) return false;
-		return this.network.send({
-			type: "action",
-			action
-		});
-	}
-	/** Broadcast game state (host → guests) */
-	broadcastState(state) {
-		if (!this.network) return false;
-		return this.network.send({
-			type: "full_state",
-			state
-		});
-	}
-	/** Disconnect */
-	disconnect() {
-		this.network?.disconnect();
-		this.network = null;
-		this._status = {
-			...this._status,
-			role: null,
-			myPlayerIndex: -1,
-			connected: false,
-			error: null,
-			roomId: null
-		};
-		this.config.onConnectionChange?.(false, null);
-	}
-};
 var DEFAULT_ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
 var PeerJSNetworkManager = class {
 	constructor(config) {
@@ -5476,253 +5612,6 @@ var FirebaseNetworkManager = class {
 		return `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 	}
 };
-//#endregion
-//#region src/engine/netStore.ts
-/**
-* Zustand store для сетевой игры «Дурак»
-* Обёртка над game-network-lib (PeerJS + Firebase)
-* Хост авторитетен, гости отправляют actions
-* Поддержка 2-6 игроков
-*/
-var unsubscribeGameStore = null;
-var useNetStore = create((set, get) => ({
-	network: null,
-	gameNet: null,
-	backend: "peerjs",
-	role: null,
-	myPlayerIndex: -1,
-	gameState: null,
-	connected: false,
-	error: null,
-	roomId: null,
-	players: [],
-	initHost: async (network, backend) => {
-		const gameNet = new GameNetwork({
-			backend,
-			onAction: (action) => {
-				executeAction(action);
-			},
-			onConnectionChange: (connected) => {
-				if (!connected) set({ connected: false });
-			},
-			onError: (error) => {
-				set({ error });
-			}
-		});
-		const roomId = await gameNet.initHost(network);
-		set({
-			network,
-			gameNet,
-			backend,
-			role: "host",
-			myPlayerIndex: 0,
-			connected: true,
-			error: null,
-			roomId
-		});
-		broadcastState(gameNet);
-		setTimeout(() => {
-			unsubscribeGameStore = useGameStore.subscribe((state) => {
-				broadcastState(gameNet, serializeGameState(state));
-			});
-		}, 0);
-		return roomId;
-	},
-	initGuest: async (network, backend, playerIndex) => {
-		const gameNet = new GameNetwork({
-			backend,
-			onState: (state, myPlayerIndex) => {
-				set({
-					gameState: state,
-					myPlayerIndex
-				});
-			},
-			onConnectionChange: (connected) => {
-				if (!connected) set({ connected: false });
-			},
-			onError: (error) => {
-				set({ error });
-			}
-		});
-		await gameNet.initGuest(network, playerIndex);
-		set({
-			network,
-			gameNet,
-			backend,
-			role: "guest",
-			myPlayerIndex: playerIndex ?? ("playerIndex" in network ? network.playerIndex : 1),
-			connected: true,
-			error: null,
-			roomId: "roomId" in network ? network.roomId : null
-		});
-	},
-	sendAction: (action) => {
-		const { gameNet } = get();
-		if (!gameNet) return;
-		gameNet.sendAction(action);
-	},
-	disconnect: () => {
-		if (unsubscribeGameStore) {
-			unsubscribeGameStore();
-			unsubscribeGameStore = null;
-		}
-		const { gameNet } = get();
-		if (gameNet) gameNet.disconnect();
-		set({
-			network: null,
-			gameNet: null,
-			backend: "peerjs",
-			role: null,
-			myPlayerIndex: -1,
-			gameState: null,
-			connected: false,
-			error: null,
-			roomId: null,
-			players: []
-		});
-	}
-}));
-/** Хост выполняет действие гостя через gameStore */
-function executeAction(action) {
-	const store = useGameStore.getState();
-	switch (action.type) {
-		case "attack": {
-			const playerIdx = action.playerIndex ?? store.activePlayerIndex ?? 0;
-			const card = store.players[playerIdx]?.hand.find((c) => c.id === action.cardId);
-			if (card) {
-				if (store.activePlayerIndex !== playerIdx) useGameStore.setState({ activePlayerIndex: playerIdx });
-				store.attack(card);
-			}
-			break;
-		}
-		case "defend": {
-			const defenderIdx = action.playerIndex ?? store.defenderIndex ?? 1;
-			const defendCard = store.players[defenderIdx]?.hand.find((c) => c.id === action.defendCardId);
-			if (defendCard) store.defend(action.attackCardId, defendCard);
-			break;
-		}
-		case "take":
-			store.take();
-			break;
-		case "pass":
-			store.pass();
-			break;
-	}
-}
-/** Извлечь сериализуемое GameState из Zustand store (без функций) */
-function serializeGameState(store) {
-	return {
-		deck: store.deck,
-		trumpSuit: store.trumpSuit,
-		trumpCard: store.trumpCard,
-		players: store.players,
-		attackerIndex: store.attackerIndex,
-		defenderIndex: store.defenderIndex,
-		activePlayerIndex: store.activePlayerIndex,
-		playerCount: store.playerCount,
-		table: store.table,
-		phase: store.phase,
-		discardPile: store.discardPile,
-		consecutivePasses: store.consecutivePasses,
-		thrownInPasses: store.thrownInPasses,
-		winner: store.winner,
-		lastAction: store.lastAction,
-		gameMode: store.gameMode,
-		roundCount: store.roundCount
-	};
-}
-/** Рассылка состояния гостям. Карты других игроков скрываются. */
-function broadcastState(gameNet, state) {
-	const s = state ?? serializeGameState(useGameStore.getState());
-	if (gameNet.status.backend === "peerjs") {
-		const guestState = {
-			...s,
-			players: s.players.map((p, i) => i === 0 ? {
-				...p,
-				hand: []
-			} : p)
-		};
-		gameNet.broadcastState(guestState);
-	} else gameNet.broadcastState(s);
-}
-//#endregion
-//#region src/components/CardComponent.tsx
-var import_jsx_runtime = require_jsx_runtime();
-/** Ранг: краткое имя для углов и полное для центра */
-function rankDisplay(rank) {
-	switch (rank) {
-		case 11: return {
-			short: "В",
-			full: "Valet"
-		};
-		case 12: return {
-			short: "Д",
-			full: "Queen"
-		};
-		case 13: return {
-			short: "К",
-			full: "King"
-		};
-		case 14: return {
-			short: "Т",
-			full: "Ace"
-		};
-		default: return {
-			short: String(rank),
-			full: String(rank)
-		};
-	}
-}
-function CardComponent({ card, trumpSuit, onClick, selected, disabled, faceDown, className = "", animating }) {
-	if (faceDown) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: `card-back ${className}` });
-	const color = SUIT_COLORS[card.suit];
-	const isTrump = trumpSuit && card.suit === trumpSuit;
-	const symbol = SUIT_SYMBOLS[card.suit];
-	const { short, full } = rankDisplay(card.rank);
-	const isFaceCard = card.rank >= 11;
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: `playing-card ${color === "red" ? "card-red" : "card-black"} ${selected ? "selected" : ""} ${isTrump ? "trump-card" : ""} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${animating === "play" ? "card-play-anim" : animating === "take" ? "card-take-anim" : animating === "discard" ? "card-discard-anim" : ""} ${className}`,
-		onClick: disabled ? void 0 : onClick,
-		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: `card-corner top-left ${color === "red" ? "text-red-600" : "text-gray-800"}`,
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "card-rank",
-					children: short
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "card-suit-small",
-					children: symbol
-				})]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: `card-center ${color === "red" ? "text-red-600" : "text-gray-800"}`,
-				children: isFaceCard ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "card-face",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-						className: "card-face-symbol",
-						children: symbol
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-						className: "card-face-label",
-						children: full
-					})]
-				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "card-big-suit",
-					children: symbol
-				})
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: `card-corner bottom-right ${color === "red" ? "text-red-600" : "text-gray-800"}`,
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "card-rank",
-					children: short
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: "card-suit-small",
-					children: symbol
-				})]
-			})
-		]
-	});
-}
 //#endregion
 //#region node_modules/@vkontakte/vk-bridge/dist/index.js
 function createCounter() {
