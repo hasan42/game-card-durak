@@ -4,16 +4,29 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { PeerJSNetworkManager } from 'game-network-lib';
-import { FirebaseNetworkManager } from 'game-network-lib';
-import { VKNetworkManager } from '../engine/vkNetwork';
+import { PeerJSNetworkManager, FirebaseNetworkManager } from 'game-network-lib';
 import type { NetworkBackend } from '../engine/netStore';
 import type { NetworkManagerInterface } from 'game-network-lib';
 
-export type NetworkProvider = 'firebase' | 'peerjs' | 'vk';
+export type NetworkProvider = 'firebase' | 'peerjs';
+
+const FIREBASE_CONFIG = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+};
+
+const PEERJS_CONFIG = {
+  host: typeof window !== 'undefined' ? window.location.hostname : 'localhost',
+  port: 9000,
+  path: '/myapp',
+};
 
 interface NetworkScreenProps {
-  onConnected: (network: NetworkManagerInterface | VKNetworkManager, role: 'host' | 'guest', backend: NetworkBackend) => void;
+  onConnected: (network: NetworkManagerInterface, role: 'host' | 'guest', backend: NetworkBackend) => void;
   onBack: () => void;
 }
 
@@ -25,7 +38,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
   const [error, setError] = useState('');
   const [generatedRoomId, setGeneratedRoomId] = useState('');
   const [playerCount, setPlayerCount] = useState(2);
-  const networkRef = useRef<NetworkManagerInterface | VKNetworkManager | null>(null);
+  const networkRef = useRef<NetworkManagerInterface | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -42,15 +55,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
 
     try {
       if (provider === 'firebase') {
-        const firebaseConfig = {
-          apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-          authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-          projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-          storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-          messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-          appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-        };
-        const network = new FirebaseNetworkManager(firebaseConfig);
+        const network = new FirebaseNetworkManager(FIREBASE_CONFIG);
         networkRef.current = network;
 
         network.on((event) => {
@@ -79,43 +84,9 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
             setTimeout(() => onConnected(network, 'host', 'firebase'), 300);
           }
         }, 1000);
-      } else if (provider === 'vk') {
-        const network = new VKNetworkManager();
-        networkRef.current = network;
-
-        network.on((event) => {
-          if (event.type === 'connected' && network.role === 'host') {
-            setStatus('Комната создана! Приглашение отправлено в VK...');
-            setGeneratedRoomId(network.roomId);
-          }
-          if (event.type === 'disconnected') {
-            setError('Соединение разорвано');
-          }
-          if (event.type === 'error') {
-            setError(String((event.payload as any)?.message || event.payload || 'Ошибка'));
-            setStatus('');
-          }
-        });
-
-        const id = await network.hostWithVKInvite(playerCount);
-        setGeneratedRoomId(id);
-        setStatus(`Комната ${id} создана! Ожидание друзей из VK...`);
-        
-        // Ждём подключения
-        const checkInterval = setInterval(() => {
-          if (network.playerList.length >= 2) {
-            clearInterval(checkInterval);
-            setStatus('Друг подключился! Начинаем...');
-            setTimeout(() => onConnected(network, 'host', 'firebase'), 300);
-          }
-        }, 1000);
       } else {
         // PeerJS
-        const network = new PeerJSNetworkManager({
-          host: typeof window !== 'undefined' ? window.location.hostname : 'localhost',
-          port: 9000,
-          path: '/myapp',
-        });
+        const network = new PeerJSNetworkManager(PEERJS_CONFIG);
         networkRef.current = network;
 
         network.on((event) => {
@@ -151,16 +122,8 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
     setError('');
 
     try {
-      if (provider === 'firebase' || provider === 'vk') {
-        const firebaseConfig = provider === 'vk' ? undefined : {
-          apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-          authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-          projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-          storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-          messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-          appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-        };
-        const network = provider === 'vk' ? new VKNetworkManager() : new FirebaseNetworkManager(firebaseConfig!);
+      if (provider === 'firebase') {
+        const network = new FirebaseNetworkManager(FIREBASE_CONFIG);
         networkRef.current = network;
 
         network.on((event) => {
@@ -175,11 +138,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
         onConnected(network, 'guest', 'firebase');
       } else {
         // PeerJS
-        const network = new PeerJSNetworkManager({
-          host: typeof window !== 'undefined' ? window.location.hostname : 'localhost',
-          port: 9000,
-          path: '/myapp',
-        });
+        const network = new PeerJSNetworkManager(PEERJS_CONFIG);
         networkRef.current = network;
 
         network.on((event) => {
@@ -305,7 +264,7 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
       <div className="table-bg min-h-screen flex flex-col items-center justify-center gap-6">
         <div className="text-6xl">🏠</div>
         <h2 className="text-3xl font-bold text-yellow-300">
-          {provider === 'firebase' ? 'Создание комнаты (Firebase)' : provider === 'vk' ? 'Создание комнаты (VK)' : 'Создание комнаты (PeerJS)'}
+          {provider === 'firebase' ? 'Создание комнаты (Firebase)' : 'Создание комнаты (PeerJS)'}
         </h2>
         
         {provider === 'firebase' && (
@@ -339,8 +298,6 @@ export function NetworkScreen({ onConnected, onBack }: NetworkScreenProps) {
         <p className="text-green-300/60 text-sm text-center max-w-xs">
           {provider === 'firebase' 
             ? 'Отправьте код друзьям. Когда все подключатся, игра начнётся.' 
-            : provider === 'vk'
-            ? 'Приглашение отправлено в VK. Дождитесь друзей.'
             : 'Отправьте код другу. Когда он подключится, игра начнётся автоматически.'}
         </p>
         <button onClick={cancelHost} className="btn btn-danger px-6 py-2 mt-4">

@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.4",
-    "@vkontakte/vk-bridge": "^3.0.1",
     "firebase": "^12.12.1",
     "game-network-lib": "github:hasan42/game-network-lib",
     "peerjs": "^1.5.5",

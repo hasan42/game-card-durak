@@ -11,8 +11,7 @@ import { SUIT_SYMBOLS, RANK_NAMES, SUIT_NAMES } from '../engine/cards';
 import type { Card, GameState } from '../engine/types';
 import type { NetworkRole } from 'game-network-lib';
 import type { NetworkManagerInterface } from 'game-network-lib';
-import { VKNetworkManager } from '../engine/vkNetwork';
-import { isVKEnvironment } from '../vk';
+
 import type { NetworkBackend } from '../engine/netStore';
 
 export function GameScreen() {
@@ -83,14 +82,13 @@ export function GameScreen() {
 
   // Методы всегда из store
   const { aiThinking } = store;
-  const isVK = isVKEnvironment();
   
 
   // ====== Сетевой экран ======
   if (showNetwork && !isNetworkMode) {
     return (
       <NetworkScreen
-        onConnected={(network: NetworkManagerInterface | VKNetworkManager, role: NetworkRole, backend: NetworkBackend) => {
+        onConnected={(network: NetworkManagerInterface, role: NetworkRole, backend: NetworkBackend) => {
           // Откладываем инициализацию, чтобы React закончил текущий рендер
           queueMicrotask(() => {
             // Инициализируем сетевой store
@@ -139,16 +137,7 @@ export function GameScreen() {
           <button onClick={() => setShowNetwork(true)} className="btn bg-purple-700 hover:bg-purple-600 text-white text-xl px-8 py-3">
             🌐 По сети
           </button>
-          {isVK && (
-            <button onClick={() => { setShowNetwork(true); }} className="btn bg-blue-600 hover:bg-blue-500 text-white text-xl px-8 py-3">
-              📱 VK Друзья
-            </button>
-          )}
-          {!isVK && (
-            <div className="text-center text-sm text-blue-300/60 mt-2">
-              VK Mini App доступен внутри VK
-            </div>
-          )}
+
         </div>
         <div className="text-green-300/50 text-sm mt-4">
           36 карт • Козырь • Классические правила
