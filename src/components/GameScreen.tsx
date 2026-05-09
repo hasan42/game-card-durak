@@ -28,6 +28,12 @@ export function GameScreen() {
   const [dealAnimating, setDealAnimating] = useState(false);
   const prevPhaseRef = useRef<string>('waiting');
 
+  // Таймер хода (сетевая игра)
+  const TURN_TIMER_SECONDS = 30;
+  const [turnTimer, setTurnTimer] = useState<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerActionRef = useRef(false);
+
   const isNetworkMode = netStore.role !== null;
   const myPlayerIndex = netStore.myPlayerIndex;
   const netGameState = netStore.gameState;
@@ -306,12 +312,6 @@ export function GameScreen() {
     }
     store.pass();
   };
-
-  // Таймер хода (сетевая игра)
-  const TURN_TIMER_SECONDS = 30;
-  const [turnTimer, setTurnTimer] = useState<number | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timerActionRef = useRef(false);
 
   useEffect(() => {
     timerActionRef.current = false;
