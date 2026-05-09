@@ -332,7 +332,7 @@ export function GameScreen() {
       </div>
 
       {/* Другие игроки */}
-      <div className="flex flex-wrap justify-center gap-2 px-3 py-2">
+      <div className="flex flex-wrap justify-center gap-2 px-3 py-2 sm:gap-3 sm:px-4">
         {otherPlayers.map(p => {
           const isDefender = p.index === defenderIdx;
           const isAttacker = p.index === attackerIdx;
@@ -355,7 +355,7 @@ export function GameScreen() {
       </div>
 
       {/* Стол */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4">
+      <div className="flex-1 flex flex-col items-center justify-center gap-2 px-2 sm:gap-3 sm:px-4">
         {deck.length > 0 && (
           <div className="flex items-center gap-1 mb-2">
             {trumpCard && (
@@ -405,19 +405,19 @@ export function GameScreen() {
       </div>
 
       {/* Кнопки действий */}
-      <div className="flex justify-center gap-3 py-2 px-4 flex-wrap">
+      <div className="flex justify-center gap-2 py-2 px-3 flex-wrap sm:gap-3 sm:px-4">
         {amIDefender && amIActive && table.some(ac => !ac.defendCard) && (
-          <button onClick={doTake} className="btn btn-danger" disabled={aiThinking}>
+          <button onClick={doTake} className="btn btn-danger min-h-[44px]" disabled={aiThinking}>
             📥 Взять ({table.reduce((n, ac) => n + (ac.defendCard ? 0 : 1), 0)} карт)
           </button>
         )}
         {(amIAttacker || amIThrower) && amIActive && table.length > 0 && table.every(ac => ac.defendCard) && (
-          <button onClick={doPass} className="btn btn-success" disabled={aiThinking}>
+          <button onClick={doPass} className="btn btn-success min-h-[44px]" disabled={aiThinking}>
             ✅ Бито!
           </button>
         )}
         {amIThrower && amIActive && (
-          <button onClick={doPass} className="btn bg-gray-700 hover:bg-gray-600 text-white" disabled={aiThinking}>
+          <button onClick={doPass} className="btn bg-gray-700 hover:bg-gray-600 text-white min-h-[44px]" disabled={aiThinking}>
             Пас
           </button>
         )}
