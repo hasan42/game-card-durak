@@ -83,6 +83,44 @@ export function GameScreen() {
     prevTableRef.current = nextIds;
   }, [gameState?.table, gameState?.lastAction]);
 
+  // Таймер хода — useEffect ниже
+
+  useEffect(() => {
+    timerActionRef.current = false;
+    const gs = gameState;
+    if (!gs || !isNetworkMode) { return; }
+    const myIdx = myPlayerIndex;
+    const active = gs.activePlayerIndex ?? 0;
+    const defender = gs.defenderIndex ?? 1;
+    const amActive = myIdx === active;
+    const amDefender = myIdx === defender;
+    if (!amActive || store.aiThinking || gs.phase === 'waiting') { return; }
+
+    setTurnTimer(TURN_TIMER_SECONDS);
+    const id = setInterval(() => {
+      setTurnTimer(prev => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(id);
+          if (!timerActionRef.current) {
+            timerActionRef.current = true;
+            setTimeout(() => {
+              if (isNetworkMode && netStore.role === 'guest') {
+                netStore.sendAction(amDefender ? { type: 'take' } : { type: 'pass' });
+              } else {
+                amDefender ? store.take() : store.pass();
+              }
+            }, 0);
+          }
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    timerRef.current = id;
+    return () => clearInterval(id);
+  }, [isNetworkMode, myPlayerIndex, gameState?.phase, gameState?.activePlayerIndex, gameState?.defenderIndex, netStore.role]);
+
   // Если нет gameState — показать загрузку
   if (!gameState) {
     return (
@@ -312,37 +350,6 @@ export function GameScreen() {
     }
     store.pass();
   };
-
-  useEffect(() => {
-    timerActionRef.current = false;
-    if (isNetworkMode && amIActive && !aiThinking && phase !== 'waiting') {
-      setTurnTimer(TURN_TIMER_SECONDS);
-      const id = setInterval(() => {
-        setTurnTimer(prev => {
-          if (prev === null) return null;
-          if (prev <= 1) {
-            clearInterval(id);
-            if (!timerActionRef.current) {
-              timerActionRef.current = true;
-              setTimeout(() => {
-                if (amIDefender) { doTake(); } else { doPass(); }
-              }, 0);
-            }
-            return null;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      timerRef.current = id;
-      return () => clearInterval(id);
-    } else {
-      setTurnTimer(null);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    }
-  }, [isNetworkMode, amIActive, aiThinking, phase]);
 
   // Другие игроки (кроме меня)
   const otherPlayers = players.map((p, i) => ({ ...p, index: i }))
