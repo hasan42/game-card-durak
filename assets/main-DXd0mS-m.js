@@ -6297,6 +6297,44 @@ function GameScreen() {
 		});
 		prevTableRef.current = nextIds;
 	}, [gameState?.table, gameState?.lastAction]);
+	(0, import_react.useEffect)(() => {
+		timerActionRef.current = false;
+		const gs = gameState;
+		if (!gs || !isNetworkMode) return;
+		const myIdx = myPlayerIndex;
+		const active = gs.activePlayerIndex ?? 0;
+		const defender = gs.defenderIndex ?? 1;
+		const amActive = myIdx === active;
+		const amDefender = myIdx === defender;
+		if (!amActive || store.aiThinking || gs.phase === "waiting") return;
+		setTurnTimer(TURN_TIMER_SECONDS);
+		const id = setInterval(() => {
+			setTurnTimer((prev) => {
+				if (prev === null) return null;
+				if (prev <= 1) {
+					clearInterval(id);
+					if (!timerActionRef.current) {
+						timerActionRef.current = true;
+						setTimeout(() => {
+							if (isNetworkMode && netStore.role === "guest") netStore.sendAction(amDefender ? { type: "take" } : { type: "pass" });
+							else amDefender ? store.take() : store.pass();
+						}, 0);
+					}
+					return null;
+				}
+				return prev - 1;
+			});
+		}, 1e3);
+		timerRef.current = id;
+		return () => clearInterval(id);
+	}, [
+		isNetworkMode,
+		myPlayerIndex,
+		gameState?.phase,
+		gameState?.activePlayerIndex,
+		gameState?.defenderIndex,
+		netStore.role
+	]);
 	if (!gameState) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "table-bg min-h-screen flex flex-col items-center justify-center gap-4",
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
@@ -6568,42 +6606,6 @@ function GameScreen() {
 		}
 		store.pass();
 	};
-	(0, import_react.useEffect)(() => {
-		timerActionRef.current = false;
-		if (isNetworkMode && amIActive && !aiThinking && phase !== "waiting") {
-			setTurnTimer(TURN_TIMER_SECONDS);
-			const id = setInterval(() => {
-				setTurnTimer((prev) => {
-					if (prev === null) return null;
-					if (prev <= 1) {
-						clearInterval(id);
-						if (!timerActionRef.current) {
-							timerActionRef.current = true;
-							setTimeout(() => {
-								if (amIDefender) doTake();
-								else doPass();
-							}, 0);
-						}
-						return null;
-					}
-					return prev - 1;
-				});
-			}, 1e3);
-			timerRef.current = id;
-			return () => clearInterval(id);
-		} else {
-			setTurnTimer(null);
-			if (timerRef.current) {
-				clearInterval(timerRef.current);
-				timerRef.current = null;
-			}
-		}
-	}, [
-		isNetworkMode,
-		amIActive,
-		aiThinking,
-		phase
-	]);
 	const otherPlayers = players.map((p, i) => ({
 		...p,
 		index: i
