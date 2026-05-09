@@ -1,12 +1,10 @@
 /**
  * Zustand store для сетевой игры «Дурак»
- * Обёртка над game-network-lib (PeerJS + Firebase)
  * Хост авторитетен, гости отправляют actions
- * Поддержка 2-6 игроков
+ * Поддержка 2-6 игроков (PeerJS + Firebase)
  */
 
 import { create } from 'zustand';
-import { GameNetwork } from 'game-network-lib';
 import type { NetworkManagerInterface } from 'game-network-lib';
 import { useGameStore } from './store';
 import type { GameState, NetworkAction } from './types';
@@ -15,7 +13,6 @@ export type NetworkBackend = 'peerjs' | 'firebase';
 
 interface NetStore {
   network: NetworkManagerInterface | null;
-  gameNet: GameNetwork | null;
   backend: NetworkBackend;
   role: 'host' | 'guest' | null;
   myPlayerIndex: number;
@@ -25,8 +22,8 @@ interface NetStore {
   roomId: string | null;
   players: { id: string; name: string; index: number; connected: boolean }[];
 
-  initHost: (network: NetworkManagerInterface, backend: NetworkBackend) => Promise<string>;
-  initGuest: (network: NetworkManagerInterface, backend: NetworkBackend, playerIndex?: number) => Promise<void>;
+  initHost: (network: NetworkManagerInterface, backend: NetworkBackend) => void;
+  initGuest: (network: NetworkManagerInterface, backend: NetworkBackend, playerIndex?: number) => void;
   sendAction: (action: NetworkAction) => void;
   disconnect: () => void;
 }
@@ -35,7 +32,6 @@ let unsubscribeGameStore: (() => void) | null = null;
 
 export const useNetStore = create<NetStore>((set, get) => ({
   network: null,
-  gameNet: null,
   backend: 'peerjs',
   role: null,
   myPlayerIndex: -1,
@@ -45,75 +41,80 @@ export const useNetStore = create<NetStore>((set, get) => ({
   roomId: null,
   players: [],
 
-  initHost: async (network, backend) => {
-    const gameNet = new GameNetwork({
-      backend,
-      onAction: (action) => {
-        executeAction(action as NetworkAction & { playerIndex: number });
-      },
-      onConnectionChange: (connected) => {
-        if (!connected) {
-          set({ connected: false });
-        }
-      },
-      onError: (error) => {
-        set({ error });
-      },
+  initHost: (network, backend) => {
+    const roomId = 'roomId' in network ? (network as any).roomId : null;
+
+    // Подписка на данные от гостей (actions)
+    network.onData((data) => {
+      const msg = data as { type: string; action?: NetworkAction; playerIndex?: number };
+      if (msg.type === 'action' && msg.action) {
+        const playerIndex = msg.playerIndex ?? (msg.action as any).playerIndex ?? -1;
+        const innerAction = (msg.action as { action?: NetworkAction }).action ?? msg.action;
+        executeAction({ ...innerAction, playerIndex });
+      }
     });
 
-    const roomId = await gameNet.initHost(network);
+    // Подписка на события
+    network.on((event) => {
+      if (event.type === 'disconnected') {
+        set({ connected: false });
+      }
+      if (event.type === 'error') {
+        set({ error: String((event.payload as any)?.message ?? event.payload ?? 'Ошибка') });
+      }
+    });
 
-    set({ network, gameNet, backend, role: 'host', myPlayerIndex: 0, connected: true, error: null, roomId });
+    set({ network, backend, role: 'host', myPlayerIndex: 0, connected: true, error: null, roomId });
 
-    // Немедленно рассылаем текущее состояние игры
-    broadcastState(gameNet);
+    // Немедленно рассылаем текущее состояние
+    broadcastState(network, backend);
 
-    // Подписка на gameStore отложенно
+    // Подписка на gameStore
     setTimeout(() => {
       unsubscribeGameStore = useGameStore.subscribe((state) => {
-        broadcastState(gameNet, serializeGameState(state));
+        broadcastState(network, backend, serializeGameState(state));
       });
     }, 0);
-
-    return roomId;
   },
 
-  initGuest: async (network, backend, playerIndex) => {
-    const gameNet = new GameNetwork({
-      backend,
-      onState: (state, myPlayerIndex) => {
-        set({ gameState: state as unknown as GameState, myPlayerIndex });
-      },
-      onConnectionChange: (connected) => {
-        if (!connected) {
-          set({ connected: false });
-        }
-      },
-      onError: (error) => {
-        set({ error });
-      },
+  initGuest: (network, backend, playerIndex) => {
+    const guestPlayerIndex = playerIndex ?? ('playerIndex' in network ? (network as any).playerIndex : 1);
+    const roomId = 'roomId' in network ? (network as any).roomId : null;
+
+    // Подписка на данные от хоста (gameState)
+    network.onData((data) => {
+      const msg = data as { type: string; state?: GameState; myPlayerIndex?: number };
+      if (msg.type === 'full_state' && msg.state) {
+        const idx = msg.myPlayerIndex ?? guestPlayerIndex;
+        set({ gameState: msg.state, myPlayerIndex: idx });
+      }
     });
 
-    await gameNet.initGuest(network, playerIndex);
-
-    const guestPlayerIndex = playerIndex ?? ('playerIndex' in network ? (network as any).playerIndex : 1);
+    // Подписка на события
+    network.on((event) => {
+      if (event.type === 'disconnected') {
+        set({ connected: false });
+      }
+      if (event.type === 'error') {
+        set({ error: String((event.payload as any)?.message ?? event.payload ?? 'Ошибка') });
+      }
+    });
 
     set({
       network,
-      gameNet,
       backend,
       role: 'guest',
       myPlayerIndex: guestPlayerIndex,
       connected: true,
       error: null,
-      roomId: 'roomId' in network ? (network as any).roomId : null,
+      roomId,
     });
   },
 
   sendAction: (action) => {
-    const { gameNet } = get();
-    if (!gameNet) return;
-    gameNet.sendAction(action);
+    const { network } = get();
+    if (!network) return;
+    network.send({ type: 'action', action });
   },
 
   disconnect: () => {
@@ -121,9 +122,9 @@ export const useNetStore = create<NetStore>((set, get) => ({
       unsubscribeGameStore();
       unsubscribeGameStore = null;
     }
-    const { gameNet } = get();
-    if (gameNet) gameNet.disconnect();
-    set({ network: null, gameNet: null, backend: 'peerjs', role: null, myPlayerIndex: -1, gameState: null, connected: false, error: null, roomId: null, players: [] });
+    const { network } = get();
+    if (network) network.disconnect();
+    set({ network: null, backend: 'peerjs', role: null, myPlayerIndex: -1, gameState: null, connected: false, error: null, roomId: null, players: [] });
   },
 }));
 
@@ -186,20 +187,20 @@ export function serializeGameState(store: any): GameState {
 }
 
 /** Рассылка состояния гостям. Карты других игроков скрываются. */
-function broadcastState(gameNet: GameNetwork, state?: GameState) {
+function broadcastState(network: NetworkManagerInterface, backend: NetworkBackend, state?: GameState) {
   const s = state ?? serializeGameState(useGameStore.getState());
 
   // Для PeerJS: скрываем карты хоста от гостя
   // Для Firebase: шлём полный state, клиент сам скрывает
-  if (gameNet.status.backend === 'peerjs') {
+  if (backend === 'peerjs') {
     const guestState: GameState = {
       ...s,
       players: s.players.map((p, i) =>
         i === 0 ? { ...p, hand: [] } : p
       ),
     };
-    gameNet.broadcastState(guestState as unknown as Record<string, unknown>);
+    network.send({ type: 'full_state', state: guestState });
   } else {
-    gameNet.broadcastState(s as unknown as Record<string, unknown>);
+    network.send({ type: 'full_state', state: s });
   }
 }
