@@ -9,6 +9,29 @@ import type { NetworkManagerInterface } from 'game-network-lib';
 import { useGameStore } from './store';
 import type { GameState, NetworkAction } from './types';
 
+const RECONNECT_KEY = 'durak_reconnect';
+
+interface ReconnectData {
+  roomId: string;
+  playerIndex: number;
+  backend: 'peerjs' | 'firebase';
+}
+
+export function saveReconnect(data: ReconnectData) {
+  try { localStorage.setItem(RECONNECT_KEY, JSON.stringify(data)); } catch {}
+}
+
+export function loadReconnect(): ReconnectData | null {
+  try {
+    const raw = localStorage.getItem(RECONNECT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export function clearReconnect() {
+  try { localStorage.removeItem(RECONNECT_KEY); } catch {}
+}
+
 export type NetworkBackend = 'peerjs' | 'firebase';
 
 interface NetStore {
@@ -66,6 +89,9 @@ export const useNetStore = create<NetStore>((set, get) => ({
 
     set({ network, backend, role: 'host', myPlayerIndex: 0, connected: true, error: null, roomId });
 
+    // Сохраняем для реконнекта
+    saveReconnect({ roomId: roomId || '', playerIndex: 0, backend });
+
     // Немедленно рассылаем текущее состояние
     broadcastState(network, backend);
 
@@ -109,6 +135,11 @@ export const useNetStore = create<NetStore>((set, get) => ({
       error: null,
       roomId,
     });
+
+    // Сохраняем для реконнекта
+    if (roomId) {
+      saveReconnect({ roomId, playerIndex: guestPlayerIndex, backend });
+    }
   },
 
   sendAction: (action) => {
@@ -124,6 +155,7 @@ export const useNetStore = create<NetStore>((set, get) => ({
     }
     const { network } = get();
     if (network) network.disconnect();
+    clearReconnect();
     set({ network: null, backend: 'peerjs', role: null, myPlayerIndex: -1, gameState: null, connected: false, error: null, roomId: null, players: [] });
   },
 }));
