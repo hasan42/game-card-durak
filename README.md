@@ -16,35 +16,35 @@
 - Играйте из любой точки мира
 - Код комнаты для подключения
 - 2-6 игроков
-- Автоматическая синхронизация через Firestore
+- Лобби со списком подключённых игроков
+- Реконнект при перезагрузке страницы
 - Хост авторитетен, гости отправляют actions
-- ✅ Протестировано от начала до конца
 
 ### PeerJS (Локальная сеть) 🏠
 - Играйте по Wi-Fi дома
 - Без интернета
 - 2 игрока
 
-### VK Mini Apps 📱
-- Интеграция с VK
-- Приглашение друзей через VK Bridge
-- Работает поверх Firebase
+## ✨ Фичи
+
+- 🎴 Анимации карт (раздача, атака, защита, взятие)
+- 📱 Мобильная адаптация (375px+, touch-friendly)
+- ⏱️ Таймер хода 30с (сетевая игра, авто-взятие/пас)
+- 🔄 Реконнект гостя (сохранение в localStorage)
+- 🏠 Лобби со списком игроков (Firebase)
+- 📡 Overlay при дисконнекте хоста
+- 🤖 AI с стратегией (атака/подкидывание/защита по очереди)
 
 ## 🚀 Быстрый старт
 
-### Локальная разработка
 ```bash
 npm install
 npm run dev
 ```
 
-### Сборка
+### Сборка и деплой
 ```bash
 npm run build
-```
-
-### Деплой на GitHub Pages
-```bash
 npm run deploy
 ```
 
@@ -78,52 +78,43 @@ service cloud.firestore {
 ## 🧪 Тестирование
 
 ```bash
-npm test
-# или
 npx vitest run
 ```
 
-7 тестов: сериализация GameState, ходы (атака/защита/Бито), взятие, смена ролей, несколько раундов.
+101 тест: карты, движок, AI, сериализация, сетевая игра.
 
 ## 🛠️ Технологии
 
 - React 19 + TypeScript
-- Vite
-- Tailwind CSS
+- Vite 8
+- Tailwind CSS v4
 - Zustand (стейт-менеджмент)
-- PeerJS (P2P)
-- Firebase Firestore (онлайн)
-- VK Bridge (VK Mini Apps)
+- [game-network-lib](https://github.com/hasan42/game-network-lib) (PeerJS + Firebase)
 
-## 📱 VK Mini Apps
+## 📦 game-network-lib
 
-### Настройка
-1. Создайте приложение в [VK Dev](https://dev.vk.com/mini-apps)
-2. Получите `APP_ID`
-3. Добавьте в `.env`:
-```bash
-VITE_VK_APP_ID=your_vk_app_id
-```
-4. Укажите URL загрузки в настройках VK: `https://your-github-pages-url/vk.html`
+Выделенная библиотека для сетевой игры:
+- `PeerJSNetworkManager` — WebRTC P2P (2 игрока)
+- `FirebaseNetworkManager` — Firestore real-time (2-6 игроков)
+- `GameNetwork` — высокоуровневая обёртка (хост авторитетен)
+- Реконнект с `playerId` / `playerIndex`
+- Установка: `npm install hasan42/game-network-lib`
 
 ## 📄 Структура проекта
 
 ```
 src/
   components/
-    GameScreen.tsx      # Главный экран игры
-    NetworkScreen.tsx   # Экран сетевой игры
-    CardComponent.tsx   # Компонент карты
+    GameScreen.tsx      # Главный экран (AI/hot-seat/сеть)
+    NetworkScreen.tsx   # Лобби, создание/подключение, реконнект
+    CardComponent.tsx   # Карточка с анимациями
   engine/
-    store.ts            # Игровой стейт (Zustand)
-    cards.ts            # Карты и масти
+    store.ts            # Игровой стейт (Zustand, N игроков)
+    cards.ts            # Карты, масти, ранги, canBeat, sortHand
     ai.ts               # AI противник
-    network.ts          # PeerJS сеть
-    firebase.ts         # Firebase конфиг
-    firebaseNetwork.ts  # Firebase сетевой менеджер
-    vkNetwork.ts        # VK Mini Apps интеграция
-    netStore.ts         # Сетевой стейт
-  vk.ts                 # VK Bridge интеграция
+    types.ts             # Типы (Card, GameState, Player, NetworkAction)
+    netStore.ts         # Сетевой стейт (обёртка над game-network-lib)
+  __tests__/            # 101 автотест (vitest)
 ```
 
 ## 📝 Лицензия
