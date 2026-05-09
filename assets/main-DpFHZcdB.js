@@ -879,11 +879,6 @@ var useNetStore = create((set, get) => ({
 			error: null,
 			roomId
 		});
-		saveReconnect({
-			roomId: roomId || "",
-			playerIndex: 0,
-			backend
-		});
 		broadcastState(network, backend);
 		setTimeout(() => {
 			unsubscribeGameStore = useGameStore.subscribe((state) => {
