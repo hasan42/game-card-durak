@@ -307,6 +307,40 @@ export function GameScreen() {
     store.pass();
   };
 
+  // Таймер хода (сетевая игра)
+  const TURN_TIMER_SECONDS = 30;
+  const [turnTimer, setTurnTimer] = useState<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (isNetworkMode && amIActive && !aiThinking) {
+      setTurnTimer(TURN_TIMER_SECONDS);
+      const id = setInterval(() => {
+        setTurnTimer(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(id);
+            // Авто-действие при истечении
+            if (amIDefender) {
+              doTake();
+            } else {
+              doPass();
+            }
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      timerRef.current = id;
+      return () => clearInterval(id);
+    } else {
+      setTurnTimer(null);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+  }, [isNetworkMode, amIActive, aiThinking]);
+
   // Другие игроки (кроме меня)
   const otherPlayers = players.map((p, i) => ({ ...p, index: i }))
     .filter(p => p.index !== myIndex);
@@ -320,6 +354,11 @@ export function GameScreen() {
         </div>
         <div className="text-green-200">📦 {deck.length} | ♻️ {gameState.discardPile?.length || 0} | 👥 {pc}</div>
         <div className="flex items-center gap-2">
+          {turnTimer !== null && (
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${turnTimer <= 5 ? 'bg-red-600 text-white animate-pulse' : 'bg-black/40 text-green-200'}`}>
+              ⏱ {turnTimer}с
+            </div>
+          )}
           {isNetworkMode && (
             <span className={netStore.connected ? 'text-green-400' : 'text-red-400'}>
               {netStore.connected ? '🟢' : '🔴'}
